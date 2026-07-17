@@ -107,6 +107,7 @@ export async function createQuizSet(
             id: questionId,
             quizSectionId: sectionId,
             prompt: question.prompt,
+            marks: question.marks,
             position: questionIndex + 1,
           });
 

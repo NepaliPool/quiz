@@ -81,6 +81,7 @@ export async function submitAttempt(
       questions: {
         columns: {
           id: true,
+          marks: true,
         },
         with: {
           options: {
@@ -155,24 +156,19 @@ export async function submitAttempt(
   }
 
   const sectionResults: SubmitSectionResult[] = sections.map((section) => {
-    const marksPerQuestion =
-      section.questions.length > 0
-        ? section.fullMarks / section.questions.length
-        : 0;
-
-    let correct = 0;
+    let score = 0;
 
     for (const question of section.questions) {
       const selected = optionById.get(answers[question.id]);
       if (selected?.isCorrect) {
-        correct += 1;
+        score += question.marks;
       }
     }
 
     return {
       sectionId: section.id,
       subjectName: section.subject.name,
-      score: Math.round(correct * marksPerQuestion),
+      score,
       fullMarks: section.fullMarks,
     };
   });

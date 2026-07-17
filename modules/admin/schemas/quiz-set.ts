@@ -11,6 +11,12 @@ const optionSchema = z.object({
 const questionSchema = z.object({
   id: z.string().optional(),
   prompt: z.string().trim().min(1, "Question prompt is required."),
+  /** Points for a correct answer. Hidden in UI for now; defaults to 1. */
+  marks: z.coerce
+    .number()
+    .int("Question marks must be a whole number.")
+    .positive("Question marks must be greater than 0.")
+    .default(1),
   options: z
     .array(optionSchema)
     .length(4, "Each question must have exactly 4 options.")
@@ -19,17 +25,32 @@ const questionSchema = z.object({
     }),
 });
 
-const sectionSchema = z.object({
-  id: z.string().optional(),
-  subjectId: z.string().min(1, "Select a subject."),
-  fullMarks: z.coerce
-    .number()
-    .int("Full marks must be a whole number.")
-    .positive("Full marks must be greater than 0."),
-  questions: z
-    .array(questionSchema)
-    .min(1, "Each section needs at least one question."),
-});
+const sectionSchema = z
+  .object({
+    id: z.string().optional(),
+    subjectId: z.string().min(1, "Select a subject."),
+    fullMarks: z.coerce
+      .number()
+      .int("Full marks must be a whole number.")
+      .positive("Full marks must be greater than 0."),
+    questions: z
+      .array(questionSchema)
+      .min(1, "Each section needs at least one question."),
+  })
+  .superRefine((section, ctx) => {
+    const questionMarksTotal = section.questions.reduce(
+      (sum, question) => sum + question.marks,
+      0,
+    );
+
+    if (section.fullMarks !== questionMarksTotal) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Full marks must equal the sum of question marks (${questionMarksTotal}).`,
+        path: ["fullMarks"],
+      });
+    }
+  });
 
 export const quizSetMetaSchema = z.object({
   title: z

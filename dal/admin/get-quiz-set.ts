@@ -14,6 +14,7 @@ export type AdminQuizOption = {
 export type AdminQuizQuestion = {
   id: string;
   prompt: string;
+  marks: number;
   position: number;
   options: AdminQuizOption[];
 };
@@ -115,6 +116,7 @@ export async function getQuizSetById(
       questions: section.questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
+        marks: question.marks,
         position: question.position,
         options: question.options.map((option) => ({
           id: option.id,

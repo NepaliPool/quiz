@@ -46,7 +46,6 @@ type SectionDraft = {
   id: string;
   subjectId: string;
   subjectName: string;
-  fullMarks: number;
   questions: QuestionDraft[];
 };
 
@@ -96,7 +95,6 @@ function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
       id: section.id,
       subjectId: section.subjectId,
       subjectName: section.subjectName,
-      fullMarks: section.fullMarks,
       questions: section.questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
@@ -240,10 +238,11 @@ export function QuizDetailEditor({
         sections: quizSet.sections.map((section) => ({
           id: section.id,
           subjectId: section.subjectId,
-          fullMarks: section.fullMarks,
+          fullMarks: section.questions.length,
           questions: section.questions.map((question) => ({
             id: question.id.startsWith("q-") ? undefined : question.id,
             prompt: question.prompt,
+            marks: 1,
             options: question.options.map((option) => ({
               label: option.label,
               isCorrect: option.isCorrect,
@@ -456,8 +455,7 @@ export function QuizDetailEditor({
                     {section.subjectName}
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    {section.fullMarks} marks · {section.questions.length}{" "}
-                    questions
+                    {section.questions.length} marks · 1 per question
                   </p>
                 </div>
               </div>
