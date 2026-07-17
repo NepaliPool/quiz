@@ -281,6 +281,7 @@ export async function updateQuizSet(
               .update(questions)
               .set({
                 prompt: question.prompt,
+                marks: question.marks,
                 position: questionIndex + 1,
               })
               .where(
@@ -296,6 +297,7 @@ export async function updateQuizSet(
               id: questionId,
               quizSectionId: sectionId,
               prompt: question.prompt,
+              marks: question.marks,
               position: questionIndex + 1,
             });
           }

@@ -24,6 +24,7 @@ import type { SubjectOption } from "@/dal/admin/get-quiz-set";
 import { getZodFieldErrors } from "@/lib/action-result";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slugify";
+import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import {
   createQuizSetSchema,
   type CreateQuizSetInput,
@@ -38,13 +39,13 @@ type OptionDraft = {
 type QuestionDraft = {
   id: string;
   prompt: string;
+  marks: number;
   options: OptionDraft[];
 };
 
 type SectionDraft = {
   id: string;
   subjectId: string;
-  fullMarks: string;
   questions: QuestionDraft[];
 };
 
@@ -60,6 +61,7 @@ function createEmptyQuestion(): QuestionDraft {
   return {
     id: `q-${Math.random().toString(36).slice(2, 9)}`,
     prompt: "",
+    marks: 1,
     options: createEmptyOptions(),
   };
 }
@@ -68,7 +70,6 @@ function createEmptySection(subjectId = ""): SectionDraft {
   return {
     id: `sec-${Math.random().toString(36).slice(2, 9)}`,
     subjectId,
-    fullMarks: "50",
     questions: [createEmptyQuestion()],
   };
 }
@@ -189,17 +190,25 @@ export function QuizCreateForm({
       durationMinutes: Number(durationMinutes),
       facultyId,
       isPublished,
-      sections: sections.map((section) => ({
-        subjectId: section.subjectId,
-        fullMarks: Number(section.fullMarks),
-        questions: section.questions.map((question) => ({
-          prompt: question.prompt,
-          options: question.options.map((option) => ({
-            label: option.label,
-            isCorrect: option.isCorrect,
+      sections: sections.map((section) => {
+        const fullMarks = section.questions.reduce(
+          (sum, question) => sum + question.marks,
+          0,
+        );
+
+        return {
+          subjectId: section.subjectId,
+          fullMarks,
+          questions: section.questions.map((question) => ({
+            prompt: question.prompt,
+            marks: question.marks,
+            options: question.options.map((option) => ({
+              label: option.label,
+              isCorrect: option.isCorrect,
+            })),
           })),
-        })),
-      })),
+        };
+      }),
     };
 
     const parsed = createQuizSetSchema.safeParse(payload);
@@ -228,8 +237,7 @@ export function QuizCreateForm({
       }
 
       toast.success(result.message ?? "Quiz set created.");
-      router.push(`/admin/quizzes/${result.data.id}`);
-      router.refresh();
+      router.push("/admin/quizzes");
     });
   }
 
@@ -424,17 +432,15 @@ export function QuizCreateForm({
                       <Label className="text-xs text-muted-foreground">
                         Full marks
                       </Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={section.fullMarks}
-                        onChange={(event) =>
-                          updateSection(section.id, {
-                            fullMarks: event.target.value,
-                          })
-                        }
-                        className="bg-background"
-                      />
+                      <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                        {section.questions.reduce(
+                          (sum, question) => sum + question.marks,
+                          0,
+                        )}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (from question marks)
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -474,6 +480,31 @@ export function QuizCreateForm({
                   ) : null}
                 </div>
               </div>
+
+              <SectionQuestionsPastePanel
+                sectionId={section.id}
+                questionCount={section.questions.length}
+                onApply={(questions, mode) =>
+                  setSections((current) =>
+                    current.map((item) =>
+                      item.id !== section.id
+                        ? item
+                        : {
+                            ...item,
+                            questions:
+                              mode === "append"
+                                ? [...item.questions, ...questions]
+                                : questions,
+                          },
+                    ),
+                  )
+                }
+                onClearAll={() =>
+                  updateSection(section.id, {
+                    questions: [createEmptyQuestion()],
+                  })
+                }
+              />
 
               <div
                 className={cn(

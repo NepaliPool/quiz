@@ -64,28 +64,23 @@ function buildSectionScores(
     id: string;
     fullMarks: number;
     subject: { name: string };
-    questions: { id: string }[];
+    questions: { id: string; marks: number }[];
   }[],
   correctByQuestion: Map<string, boolean>,
 ): AttemptSectionResult[] {
   return sections.map((section) => {
-    const marksPerQuestion =
-      section.questions.length > 0
-        ? section.fullMarks / section.questions.length
-        : 0;
-
-    let correct = 0;
+    let score = 0;
 
     for (const question of section.questions) {
       if (correctByQuestion.get(question.id)) {
-        correct += 1;
+        score += question.marks;
       }
     }
 
     return {
       sectionId: section.id,
       subjectName: section.subject.name,
-      score: Math.round(correct * marksPerQuestion),
+      score,
       fullMarks: section.fullMarks,
     };
   });
@@ -144,6 +139,7 @@ async function loadSectionsForScoring(quizSetId: string) {
       questions: {
         columns: {
           id: true,
+          marks: true,
         },
       },
     },
@@ -170,6 +166,7 @@ async function loadSectionsWithOptions(quizSetId: string) {
           id: true,
           prompt: true,
           position: true,
+          marks: true,
         },
         with: {
           options: {
@@ -336,12 +333,7 @@ export async function getAttemptAnswerSheetByCode({
   );
 
   const sheetSections: AnswerSheetSection[] = sections.map((section) => {
-    const marksPerQuestion =
-      section.questions.length > 0
-        ? section.fullMarks / section.questions.length
-        : 0;
-
-    let correctCount = 0;
+    let score = 0;
 
     const questions: AnswerSheetQuestion[] = section.questions.map(
       (question) => {
@@ -350,7 +342,7 @@ export async function getAttemptAnswerSheetByCode({
         const isCorrect = Boolean(answer?.isCorrect);
 
         if (isCorrect) {
-          correctCount += 1;
+          score += question.marks;
         }
 
         return {
@@ -373,7 +365,7 @@ export async function getAttemptAnswerSheetByCode({
     return {
       sectionId: section.id,
       subjectName: section.subject.name,
-      score: Math.round(correctCount * marksPerQuestion),
+      score,
       fullMarks: section.fullMarks,
       questions,
     };

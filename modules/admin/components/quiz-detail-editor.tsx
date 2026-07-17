@@ -39,6 +39,7 @@ type OptionDraft = {
 type QuestionDraft = {
   id: string;
   prompt: string;
+  marks: number;
   options: OptionDraft[];
 };
 
@@ -46,7 +47,6 @@ type SectionDraft = {
   id: string;
   subjectId: string;
   subjectName: string;
-  fullMarks: number;
   questions: QuestionDraft[];
 };
 
@@ -76,8 +76,13 @@ function createEmptyQuestion(): QuestionDraft {
   return {
     id: `q-${Math.random().toString(36).slice(2, 9)}`,
     prompt: "",
+    marks: 1,
     options: createEmptyOptions(),
   };
+}
+
+function sectionMarksTotal(questions: QuestionDraft[]) {
+  return questions.reduce((sum, question) => sum + question.marks, 0);
 }
 
 function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
@@ -96,10 +101,10 @@ function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
       id: section.id,
       subjectId: section.subjectId,
       subjectName: section.subjectName,
-      fullMarks: section.fullMarks,
       questions: section.questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
+        marks: question.marks,
         options: question.options.map((option) => ({
           id: option.id,
           label: option.label,
@@ -240,10 +245,11 @@ export function QuizDetailEditor({
         sections: quizSet.sections.map((section) => ({
           id: section.id,
           subjectId: section.subjectId,
-          fullMarks: section.fullMarks,
+          fullMarks: sectionMarksTotal(section.questions),
           questions: section.questions.map((question) => ({
             id: question.id.startsWith("q-") ? undefined : question.id,
             prompt: question.prompt,
+            marks: question.marks,
             options: question.options.map((option) => ({
               label: option.label,
               isCorrect: option.isCorrect,
@@ -456,8 +462,8 @@ export function QuizDetailEditor({
                     {section.subjectName}
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    {section.fullMarks} marks · {section.questions.length}{" "}
-                    questions
+                    {sectionMarksTotal(section.questions)} marks ·{" "}
+                    {section.questions.length} questions
                   </p>
                 </div>
               </div>

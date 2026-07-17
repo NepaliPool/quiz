@@ -236,6 +236,8 @@ export const questions = pgTable(
       .notNull()
       .references(() => quizSections.id, { onDelete: "cascade" }),
     prompt: text("prompt").notNull(),
+    /** Points awarded when answered correctly. Defaults to 1. */
+    marks: integer("marks").default(1).notNull(),
     /** Display order within the subject section (1-based). */
     position: integer("position").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -251,6 +253,7 @@ export const questions = pgTable(
     ),
     index("questions_quiz_section_id_idx").on(table.quizSectionId),
     check("questions_position_positive", sql`${table.position} > 0`),
+    check("questions_marks_positive", sql`${table.marks} > 0`),
   ],
 );
 
