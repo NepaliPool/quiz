@@ -1,0 +1,581 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { createQuizSet } from "@/actions/admin/quizzes/create";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import type { FacultyOption } from "@/dal/admin/get-faculties";
+import type { SubjectOption } from "@/dal/admin/get-quiz-set";
+import { getZodFieldErrors } from "@/lib/action-result";
+import { cn } from "@/lib/utils";
+import { slugify } from "@/lib/slugify";
+import {
+  createQuizSetSchema,
+  type CreateQuizSetInput,
+} from "@/modules/admin/schemas/quiz-set";
+
+type OptionDraft = {
+  id: string;
+  label: string;
+  isCorrect: boolean;
+};
+
+type QuestionDraft = {
+  id: string;
+  prompt: string;
+  options: OptionDraft[];
+};
+
+type SectionDraft = {
+  id: string;
+  subjectId: string;
+  fullMarks: string;
+  questions: QuestionDraft[];
+};
+
+function createEmptyOptions(): OptionDraft[] {
+  return [1, 2, 3, 4].map((position) => ({
+    id: `opt-${position}-${Math.random().toString(36).slice(2, 7)}`,
+    label: "",
+    isCorrect: position === 1,
+  }));
+}
+
+function createEmptyQuestion(): QuestionDraft {
+  return {
+    id: `q-${Math.random().toString(36).slice(2, 9)}`,
+    prompt: "",
+    options: createEmptyOptions(),
+  };
+}
+
+function createEmptySection(subjectId = ""): SectionDraft {
+  return {
+    id: `sec-${Math.random().toString(36).slice(2, 9)}`,
+    subjectId,
+    fullMarks: "50",
+    questions: [createEmptyQuestion()],
+  };
+}
+
+export function QuizCreateForm({
+  faculties,
+  subjects,
+}: {
+  faculties: FacultyOption[];
+  subjects: SubjectOption[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [description, setDescription] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("120");
+  const [isPublished, setIsPublished] = useState(false);
+  const [facultyId, setFacultyId] = useState(faculties[0]?.id ?? "");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [sections, setSections] = useState<SectionDraft[]>([
+    createEmptySection(
+      subjects.find((subject) => subject.facultyId === faculties[0]?.id)?.id ??
+        "",
+    ),
+  ]);
+
+  const facultySubjects = useMemo(
+    () => subjects.filter((subject) => subject.facultyId === facultyId),
+    [facultyId, subjects],
+  );
+
+  const subjectNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        facultySubjects.map((subject) => [subject.id, subject.name]),
+      ),
+    [facultySubjects],
+  );
+
+  function updateSection(sectionId: string, patch: Partial<SectionDraft>) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId ? { ...section, ...patch } : section,
+      ),
+    );
+  }
+
+  function updateQuestion(
+    sectionId: string,
+    questionId: string,
+    patch: Partial<QuestionDraft>,
+  ) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              questions: section.questions.map((question) =>
+                question.id === questionId
+                  ? { ...question, ...patch }
+                  : question,
+              ),
+            },
+      ),
+    );
+  }
+
+  function updateOption(
+    sectionId: string,
+    questionId: string,
+    optionId: string,
+    patch: Partial<OptionDraft>,
+  ) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              questions: section.questions.map((question) => {
+                if (question.id !== questionId) return question;
+
+                const options = question.options.map((option) => {
+                  if (patch.isCorrect === true) {
+                    return {
+                      ...option,
+                      isCorrect: option.id === optionId,
+                      ...(option.id === optionId ? patch : {}),
+                    };
+                  }
+
+                  return option.id === optionId
+                    ? { ...option, ...patch }
+                    : option;
+                });
+
+                return { ...question, options };
+              }),
+            },
+      ),
+    );
+  }
+
+  function handleFacultyChange(nextFacultyId: string) {
+    setFacultyId(nextFacultyId);
+    const firstSubject =
+      subjects.find((subject) => subject.facultyId === nextFacultyId)?.id ?? "";
+    setSections([createEmptySection(firstSubject)]);
+  }
+
+  function handleSubmit() {
+    const payload = {
+      title,
+      slug,
+      description,
+      durationMinutes: Number(durationMinutes),
+      facultyId,
+      isPublished,
+      sections: sections.map((section) => ({
+        subjectId: section.subjectId,
+        fullMarks: Number(section.fullMarks),
+        questions: section.questions.map((question) => ({
+          prompt: question.prompt,
+          options: question.options.map((option) => ({
+            label: option.label,
+            isCorrect: option.isCorrect,
+          })),
+        })),
+      })),
+    };
+
+    const parsed = createQuizSetSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      setFieldErrors(
+        getZodFieldErrors<CreateQuizSetInput>(
+          parsed.error,
+        ) as Record<string, string>,
+      );
+      toast.error(parsed.error.issues[0]?.message ?? "Fix the form errors.");
+      return;
+    }
+
+    setFieldErrors({});
+
+    startTransition(async () => {
+      const result = await createQuizSet(parsed.data);
+
+      if (!result.success) {
+        if (result.errors) {
+          setFieldErrors(result.errors);
+        }
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message ?? "Quiz set created.");
+      router.push(`/admin/quizzes/${result.data.id}`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link href="/admin/quizzes">
+            <ArrowLeft className="size-4" />
+            Back
+          </Link>
+        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/quizzes">Cancel</Link>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isPending || faculties.length === 0}
+          >
+            Create quiz set
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+          New quiz set
+        </h1>
+        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+          Set faculty and details first, then add subject sections with their
+          own marks and questions.
+        </p>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <div className="border-b bg-muted/40 px-5 py-4">
+          <h2 className="font-semibold tracking-tight">Quiz details</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            These show on the faculty page and public quiz set route.
+          </p>
+        </div>
+        <div className="grid gap-4 p-5 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="quiz-title">Title</Label>
+            <Input
+              id="quiz-title"
+              value={title}
+              onChange={(event) => {
+                const next = event.target.value;
+                setTitle(next);
+                setSlug(slugify(next));
+              }}
+              placeholder="Entrance Assessment 2026"
+            />
+            {fieldErrors.title ? (
+              <p className="text-sm text-destructive">{fieldErrors.title}</p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quiz-slug">Slug</Label>
+            <Input
+              id="quiz-slug"
+              value={slug}
+              onChange={(event) => setSlug(slugify(event.target.value))}
+              placeholder="entrance-2026"
+            />
+            {fieldErrors.slug ? (
+              <p className="text-sm text-destructive">{fieldErrors.slug}</p>
+            ) : null}
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="quiz-description">Description</Label>
+            <Textarea
+              id="quiz-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+              placeholder="Short description for participants"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Faculty</Label>
+            <Select value={facultyId} onValueChange={handleFacultyChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select faculty" />
+              </SelectTrigger>
+              <SelectContent>
+                {faculties.map((faculty) => (
+                  <SelectItem key={faculty.id} value={faculty.id}>
+                    {faculty.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {fieldErrors.facultyId ? (
+              <p className="text-sm text-destructive">{fieldErrors.facultyId}</p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quiz-duration">Duration (minutes)</Label>
+            <Input
+              id="quiz-duration"
+              type="number"
+              min={1}
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(event.target.value)}
+            />
+            {fieldErrors.durationMinutes ? (
+              <p className="text-sm text-destructive">
+                {fieldErrors.durationMinutes}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 md:col-span-2">
+            <Checkbox
+              id="quiz-published"
+              checked={isPublished}
+              onCheckedChange={(checked) => setIsPublished(checked === true)}
+            />
+            <Label htmlFor="quiz-published">Publish immediately</Label>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Subject sections
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Example: English 50, Maths 40, Science 45, GK 30
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setSections((current) => [
+              ...current,
+              createEmptySection(facultySubjects[0]?.id ?? ""),
+            ])
+          }
+        >
+          <Plus className="size-4" />
+          Add section
+        </Button>
+      </div>
+
+      <div className="space-y-8">
+        {sections.map((section) => {
+          const subjectName =
+            subjectNameById[section.subjectId] ?? "Subject section";
+
+          return (
+            <section
+              key={section.id}
+              className="overflow-hidden rounded-2xl border bg-card"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-4">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-background text-sm font-semibold">
+                    {subjectName.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Subject
+                      </Label>
+                      <Select
+                        value={section.subjectId}
+                        onValueChange={(value) =>
+                          updateSection(section.id, { subjectId: value })
+                        }
+                      >
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue placeholder="Select subject" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {facultySubjects.map((subject) => (
+                            <SelectItem key={subject.id} value={subject.id}>
+                              {subject.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Full marks
+                      </Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={section.fullMarks}
+                        onChange={(event) =>
+                          updateSection(section.id, {
+                            fullMarks: event.target.value,
+                          })
+                        }
+                        className="bg-background"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      updateSection(section.id, {
+                        questions: [
+                          createEmptyQuestion(),
+                          ...section.questions,
+                        ],
+                      })
+                    }
+                  >
+                    <Plus className="size-4" />
+                    Add question
+                  </Button>
+                  {sections.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() =>
+                        setSections((current) =>
+                          current.filter((item) => item.id !== section.id),
+                        )
+                      }
+                      aria-label="Delete section"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "grid gap-4 p-5 lg:grid-cols-2",
+                  section.questions.length > 6 && "max-h-216 overflow-y-auto",
+                )}
+              >
+                {section.questions.map((question, questionIndex) => (
+                  <div
+                    key={question.id}
+                    className="group flex flex-col gap-4 rounded-xl border bg-background p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="mt-2.5 shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                        Q{questionIndex + 1}
+                      </span>
+                      <Textarea
+                        value={question.prompt}
+                        onChange={(event) =>
+                          updateQuestion(section.id, question.id, {
+                            prompt: event.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="min-h-18 flex-1 resize-none"
+                        placeholder="Question prompt"
+                      />
+                      {section.questions.length > 1 ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() =>
+                            updateSection(section.id, {
+                              questions: section.questions.filter(
+                                (item) => item.id !== question.id,
+                              ),
+                            })
+                          }
+                          aria-label={`Delete question ${questionIndex + 1}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {question.options.map((option, optionIndex) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            updateOption(section.id, question.id, option.id, {
+                              isCorrect: true,
+                            })
+                          }
+                          className={cn(
+                            "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
+                            option.isCorrect
+                              ? "border-foreground/30 bg-muted"
+                              : "border-transparent hover:bg-muted/50",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium",
+                              option.isCorrect &&
+                                "border-foreground bg-foreground text-background",
+                            )}
+                          >
+                            {String.fromCharCode(65 + optionIndex)}
+                          </span>
+                          <Input
+                            value={option.label}
+                            onChange={(event) =>
+                              updateOption(
+                                section.id,
+                                question.id,
+                                option.id,
+                                { label: event.target.value },
+                              )
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                            className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                          />
+                          {option.isCorrect ? (
+                            <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                              Correct
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

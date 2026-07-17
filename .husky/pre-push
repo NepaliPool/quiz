@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -e
+
+echo "→ Running typecheck..."
+bun run typecheck
+
+echo "→ Running production build..."
+bun run build
+
+echo "✓ Pre-push checks passed"
