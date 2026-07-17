@@ -22,6 +22,7 @@ const QUESTION_START =
   /^(?:Q(?:uestion)?\s*\d*\s*[:.)-]\s*|\d+\s*[.)]\s+)/i;
 const OPTION_LINE = /^([A-D])\s*[).:-]\s*(.+)$/i;
 const CORRECT_LINE = /^(?:correct|answer)\s*[:.=-]?\s*([A-D])\s*$/i;
+const CORRECT_MARKER = /(?:\*|✓|\(correct\)|\(answer\))\s*$/i;
 
 export const PASTE_QUESTIONS_FORMAT_HELP = `Q: What is the capital of France?
 A) London
@@ -40,13 +41,11 @@ function newId(prefix: string) {
 }
 
 function isCorrectMarker(raw: string) {
-  return /\*|✓|\(correct\)|\(answer\)/i.test(raw);
+  return CORRECT_MARKER.test(raw);
 }
 
 function stripCorrectMarker(raw: string) {
-  return raw
-    .replace(/\s*(?:\*|✓|\(correct\)|\(answer\))\s*$/i, "")
-    .trim();
+  return raw.replace(CORRECT_MARKER, "").trim();
 }
 
 /**
@@ -71,17 +70,19 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
   const errors: ParsePastedQuestionsError[] = [];
 
   type Draft = {
+    sourceIndex: number;
     prompt: string;
     options: Array<{ letter: string; label: string; isCorrect: boolean }>;
     correctLetter: string | null;
   };
 
   let current: Draft | null = null;
+  let nextSourceIndex = 1;
 
   function flush() {
     if (!current) return;
 
-    const questionIndex = questions.length + 1;
+    const questionIndex = current.sourceIndex;
     const prompt = current.prompt.trim();
 
     if (!prompt) {
@@ -164,7 +165,7 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
     if (optionMatch && current) {
       const letter = optionMatch[1]!.toUpperCase();
       const rawLabel = optionMatch[2] ?? "";
-      const marked = isCorrectMarker(line);
+      const marked = isCorrectMarker(rawLabel);
       current.options.push({
         letter,
         label: stripCorrectMarker(rawLabel),
@@ -176,10 +177,12 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
     if (QUESTION_START.test(line) || !current) {
       flush();
       current = {
+        sourceIndex: nextSourceIndex,
         prompt: line.replace(QUESTION_START, "").trim() || line,
         options: [],
         correctLetter: null,
       };
+      nextSourceIndex += 1;
       continue;
     }
 
@@ -190,8 +193,8 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
     }
 
     errors.push({
-      questionIndex: questions.length + 1,
-      message: `Unexpected line in question ${questions.length + 1}: "${line}"`,
+      questionIndex: current.sourceIndex,
+      message: `Unexpected line in question ${current.sourceIndex}: "${line}"`,
     });
   }
 
@@ -212,11 +215,13 @@ export function parsedQuestionsToDrafts(
 ): Array<{
   id: string;
   prompt: string;
+  marks: number;
   options: Array<{ id: string; label: string; isCorrect: boolean }>;
 }> {
   return questions.map((question) => ({
     id: newId("q"),
     prompt: question.prompt,
+    marks: 1,
     options: question.options.map((option, index) => ({
       id: newId(`opt-${index + 1}`),
       label: option.label,

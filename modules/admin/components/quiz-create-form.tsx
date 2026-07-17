@@ -39,6 +39,7 @@ type OptionDraft = {
 type QuestionDraft = {
   id: string;
   prompt: string;
+  marks: number;
   options: OptionDraft[];
 };
 
@@ -60,6 +61,7 @@ function createEmptyQuestion(): QuestionDraft {
   return {
     id: `q-${Math.random().toString(36).slice(2, 9)}`,
     prompt: "",
+    marks: 1,
     options: createEmptyOptions(),
   };
 }
@@ -188,18 +190,25 @@ export function QuizCreateForm({
       durationMinutes: Number(durationMinutes),
       facultyId,
       isPublished,
-      sections: sections.map((section) => ({
-        subjectId: section.subjectId,
-        fullMarks: section.questions.length,
-        questions: section.questions.map((question) => ({
-          prompt: question.prompt,
-          marks: 1,
-          options: question.options.map((option) => ({
-            label: option.label,
-            isCorrect: option.isCorrect,
+      sections: sections.map((section) => {
+        const fullMarks = section.questions.reduce(
+          (sum, question) => sum + question.marks,
+          0,
+        );
+
+        return {
+          subjectId: section.subjectId,
+          fullMarks,
+          questions: section.questions.map((question) => ({
+            prompt: question.prompt,
+            marks: question.marks,
+            options: question.options.map((option) => ({
+              label: option.label,
+              isCorrect: option.isCorrect,
+            })),
           })),
-        })),
-      })),
+        };
+      }),
     };
 
     const parsed = createQuizSetSchema.safeParse(payload);
@@ -229,7 +238,6 @@ export function QuizCreateForm({
 
       toast.success(result.message ?? "Quiz set created.");
       router.push("/admin/quizzes");
-      router.refresh();
     });
   }
 
@@ -425,9 +433,12 @@ export function QuizCreateForm({
                         Full marks
                       </Label>
                       <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
-                        {section.questions.length}
+                        {section.questions.reduce(
+                          (sum, question) => sum + question.marks,
+                          0,
+                        )}
                         <span className="ml-2 text-xs text-muted-foreground">
-                          (1 per question)
+                          (from question marks)
                         </span>
                       </div>
                     </div>

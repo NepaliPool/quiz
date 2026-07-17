@@ -26,6 +26,7 @@ import {
 type QuestionDraft = {
   id: string;
   prompt: string;
+  marks: number;
   options: Array<{ id: string; label: string; isCorrect: boolean }>;
 };
 
