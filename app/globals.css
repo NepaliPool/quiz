@@ -185,6 +185,13 @@
   border-radius: 0;
 }
 
+/* Switches keep a normal pill shape inside sharp branded shells */
+.landing :is([data-slot="switch"], [data-slot="switch-thumb"]),
+.admin :is([data-slot="switch"], [data-slot="switch-thumb"]),
+.auth :is([data-slot="switch"], [data-slot="switch-thumb"]) {
+  border-radius: 9999px;
+}
+
 @keyframes landing-rise {
   from {
     opacity: 0;

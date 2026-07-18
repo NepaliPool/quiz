@@ -8,13 +8,14 @@ import { toast } from "sonner";
 
 import { deleteQuizSet } from "@/actions/admin/quizzes/delete";
 import {
+  setQuizSetPublished,
   updateQuizSet,
   updateQuizSetMeta,
 } from "@/actions/admin/quizzes/update";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -169,6 +170,7 @@ export function QuizDetailEditor({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isPublishPending, setIsPublishPending] = useState(false);
   const [quizSet, setQuizSet] = useState(() => toEditorState(initialQuizSet));
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<string, string>>
@@ -307,6 +309,52 @@ export function QuizDetailEditor({
       ...section,
       questions: [createEmptyQuestion(), ...section.questions],
     }));
+  }
+
+  function handlePublishToggle(nextPublished: boolean) {
+    if (isPublishPending || quizSet.isPublished === nextPublished) {
+      return;
+    }
+
+    const previousPublished = quizSet.isPublished;
+
+    setQuizSet((current) => ({
+      ...current,
+      isPublished: nextPublished,
+    }));
+    setIsPublishPending(true);
+
+    void (async () => {
+      try {
+        const result = await setQuizSetPublished({
+          id: quizSet.id,
+          isPublished: nextPublished,
+        });
+
+        if (!result.success) {
+          setQuizSet((current) => ({
+            ...current,
+            isPublished: previousPublished,
+          }));
+          toast.error(result.message);
+          return;
+        }
+
+        toast.success(
+          result.message ??
+            (nextPublished ? "Quiz set published." : "Quiz set unpublished."),
+        );
+        router.refresh();
+      } catch {
+        setQuizSet((current) => ({
+          ...current,
+          isPublished: previousPublished,
+        }));
+        toast.error("Could not update publish state. Please try again.");
+      } finally {
+        setIsPublishPending(false);
+      }
+    })();
   }
 
   function handleSave() {
@@ -622,18 +670,19 @@ export function QuizDetailEditor({
                 </p>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
+            <div className="flex items-center justify-between gap-3 border px-3 py-2.5">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-published">Published</Label>
+                <p className="text-xs text-muted-foreground">
+                  Visible on the faculty page when on.
+                </p>
+              </div>
+              <Switch
                 id="edit-published"
                 checked={quizSet.isPublished}
-                onCheckedChange={(checked) =>
-                  setQuizSet((current) => ({
-                    ...current,
-                    isPublished: checked === true,
-                  }))
-                }
+                disabled={isPublishPending}
+                onCheckedChange={handlePublishToggle}
               />
-              <Label htmlFor="edit-published">Published</Label>
             </div>
           </div>
         </section>

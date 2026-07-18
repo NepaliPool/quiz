@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 export const ACCESS_CODE_STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "available", label: "Available" },
+  { value: "issued", label: "Issued" },
   { value: "used", label: "Used" },
   { value: "expired", label: "Expired" },
 ] as const;
@@ -18,6 +19,10 @@ const STATUS_STYLES: Record<
   available: {
     label: "Available",
     dot: "bg-emerald-500",
+  },
+  issued: {
+    label: "Issued",
+    dot: "bg-sky-500",
   },
   used: {
     label: "Used",

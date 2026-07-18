@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AdminEmptyState,
+  AdminListResults,
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
@@ -93,6 +94,7 @@ export function QuizzesList({
         onQueryChange={list.setQuery}
         onClearFilters={() => list.clearFilters(["faculty", "subject"])}
         showClear={hasActiveFilters}
+        isPending={list.isPending}
         placeholder="Search by title or slug"
         filters={
           <>
@@ -137,6 +139,7 @@ export function QuizzesList({
         }
       />
 
+      <AdminListResults isPending={list.isPending}>
       {data.items.length === 0 ? (
         <AdminEmptyState
           title="No quiz sets found"
@@ -208,6 +211,7 @@ export function QuizzesList({
           ) : null}
         </div>
       )}
+      </AdminListResults>
     </div>
   );
 }

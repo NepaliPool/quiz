@@ -1,11 +1,23 @@
-import { and, asc, count, desc, eq, ilike, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+} from "drizzle-orm";
 
 import { db } from "@/db";
 import { accessCodes, quizAttempts, quizSets } from "@/db/schema";
 import { requireAdminForDal } from "@/dal/admin/require-admin";
 import { ADMIN_PAGE_SIZE } from "@/modules/admin/constants";
 
-export type AccessCodeStatus = "available" | "used" | "expired";
+export type AccessCodeStatus = "available" | "issued" | "used" | "expired";
 
 export type AccessCodeListItem = {
   id: string;
@@ -13,8 +25,10 @@ export type AccessCodeListItem = {
   quizSetId: string;
   quizSetTitle: string;
   status: AccessCodeStatus;
+  isIssued: boolean;
   isUsed: boolean;
   hasAttempt: boolean;
+  issuedAt: string | null;
   usedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -30,6 +44,7 @@ export type AccessCodeListResult = {
 
 function resolveStatus(
   isUsed: boolean,
+  isIssued: boolean,
   expiresAt: Date | null,
   now: Date,
 ): AccessCodeStatus {
@@ -41,11 +56,22 @@ function resolveStatus(
     return "expired";
   }
 
+  if (isIssued) {
+    return "issued";
+  }
+
   return "available";
 }
 
 function toDateString(value: Date | null) {
   return value ? value.toISOString().slice(0, 10) : null;
+}
+
+function notExpiredFilter(now: Date): SQL {
+  return or(
+    isNull(accessCodes.expiresAt),
+    gte(accessCodes.expiresAt, now),
+  )!;
 }
 
 export async function getAccessCodes({
@@ -82,7 +108,16 @@ export async function getAccessCodes({
     filters.push(
       and(
         eq(accessCodes.isUsed, false),
-        or(isNull(accessCodes.expiresAt), sql`${accessCodes.expiresAt} >= ${now}`)!,
+        eq(accessCodes.isIssued, false),
+        notExpiredFilter(now),
+      )!,
+    );
+  } else if (status === "issued") {
+    filters.push(
+      and(
+        eq(accessCodes.isUsed, false),
+        eq(accessCodes.isIssued, true),
+        notExpiredFilter(now),
       )!,
     );
   } else if (status === "expired") {
@@ -112,7 +147,9 @@ export async function getAccessCodes({
       code: accessCodes.code,
       quizSetId: accessCodes.quizSetId,
       quizSetTitle: quizSets.title,
+      isIssued: accessCodes.isIssued,
       isUsed: accessCodes.isUsed,
+      issuedAt: accessCodes.issuedAt,
       usedAt: accessCodes.usedAt,
       expiresAt: accessCodes.expiresAt,
       createdAt: accessCodes.createdAt,
@@ -132,9 +169,11 @@ export async function getAccessCodes({
       code: row.code,
       quizSetId: row.quizSetId,
       quizSetTitle: row.quizSetTitle,
-      status: resolveStatus(row.isUsed, row.expiresAt, now),
+      status: resolveStatus(row.isUsed, row.isIssued, row.expiresAt, now),
+      isIssued: row.isIssued,
       isUsed: row.isUsed,
       hasAttempt: Boolean(row.attemptId),
+      issuedAt: toDateString(row.issuedAt),
       usedAt: toDateString(row.usedAt),
       expiresAt: toDateString(row.expiresAt),
       createdAt: toDateString(row.createdAt) ?? "",
