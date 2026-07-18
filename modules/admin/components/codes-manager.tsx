@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -97,6 +97,19 @@ export function CodesManager({
     Record<string, boolean>
   >({});
   const [togglingIds, setTogglingIds] = useState<Record<string, true>>({});
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!copiedCodeId) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setCopiedCodeId(null);
+    }, 1500);
+
+    return () => window.clearTimeout(timeout);
+  }, [copiedCodeId]);
 
   useEffect(() => {
     setIssuedOverrides((current) => {
@@ -189,6 +202,17 @@ export function CodesManager({
       toast.success(result.message ?? "Deleted.");
       router.refresh();
     });
+  }
+
+  function handleCopyCode(code: AccessCodeListResult["items"][number]) {
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(code.code);
+        setCopiedCodeId(code.id);
+      } catch {
+        toast.error("Could not copy code. Please try again.");
+      }
+    })();
   }
 
   function handleIssuedToggle(
@@ -362,8 +386,33 @@ export function CodesManager({
 
                   return (
                     <TableRow key={code.id}>
-                      <TableCell className="font-mono font-medium">
-                        {code.code}
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono font-medium">
+                            {code.code}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label={
+                              copiedCodeId === code.id
+                                ? `${code.code} copied`
+                                : `Copy ${code.code}`
+                            }
+                            title={
+                              copiedCodeId === code.id ? "Copied" : "Copy code"
+                            }
+                            onClick={() => handleCopyCode(code)}
+                          >
+                            {copiedCodeId === code.id ? (
+                              <Check className="size-3.5 text-foreground" />
+                            ) : (
+                              <Copy className="size-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell>{code.quizSetTitle}</TableCell>
                       <TableCell>

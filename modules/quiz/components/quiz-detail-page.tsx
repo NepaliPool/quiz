@@ -26,6 +26,7 @@ import type {
 } from "@/dal/public/get-quiz-set";
 import { cn } from "@/lib/utils";
 import { PublicPageShell } from "@/modules/public/components/public-page-shell";
+import { ContentLeakGuard } from "@/modules/quiz/components/content-leak-guard";
 import {
   startAttemptSchema,
   submitAttemptSchema,
@@ -287,6 +288,9 @@ export function QuizDetailPage({
       )}
 
       {step === "taking" && (
+        <ContentLeakGuard
+          watermark={`${quizSet.title} · ${accessCode.trim().toUpperCase() || "QuizDesk"}`}
+        >
         <section className="space-y-10">
           <div className="sticky top-0 z-10 -mx-6 border-b bg-background/95 px-6 py-4 backdrop-blur">
             <div className="flex items-center justify-between gap-4 text-sm">
@@ -344,6 +348,7 @@ export function QuizDetailPage({
             </Button>
           </div>
         </section>
+        </ContentLeakGuard>
       )}
     </PublicPageShell>
   );
