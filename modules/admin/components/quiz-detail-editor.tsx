@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   AdminQuizSetDetail,
@@ -82,8 +89,24 @@ function createEmptyQuestion(): QuestionDraft {
   };
 }
 
+function createEmptySection(
+  subjectId: string,
+  subjectName: string,
+): SectionDraft {
+  return {
+    id: `sec-${Math.random().toString(36).slice(2, 9)}`,
+    subjectId,
+    subjectName,
+    questions: [createEmptyQuestion()],
+  };
+}
+
 function sectionMarksTotal(questions: QuestionDraft[]) {
   return questions.reduce((sum, question) => sum + question.marks, 0);
+}
+
+function isClientDraftId(id: string, prefix: "q-" | "sec-") {
+  return id.startsWith(prefix);
 }
 
 function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
@@ -118,6 +141,7 @@ function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
 
 export function QuizDetailEditor({
   initialQuizSet,
+  facultySubjects = [],
 }: {
   initialQuizSet: AdminQuizSetDetail;
   facultySubjects?: SubjectOption[];
@@ -130,6 +154,10 @@ export function QuizDetailEditor({
   >({});
   const locked = quizSet.hasAttempts;
 
+  const usedSubjectIds = new Set(
+    quizSet.sections.map((section) => section.subjectId),
+  );
+
   function updateSection(
     sectionId: string,
     updater: (section: SectionDraft) => SectionDraft,
@@ -141,6 +169,54 @@ export function QuizDetailEditor({
       sections: current.sections.map((section) =>
         section.id === sectionId ? updater(section) : section,
       ),
+    }));
+  }
+
+  function addSection() {
+    if (locked) return;
+
+    const nextSubject = facultySubjects.find(
+      (subject) => !usedSubjectIds.has(subject.id),
+    );
+
+    if (!nextSubject) {
+      toast.error("All faculty subjects are already in this quiz set.");
+      return;
+    }
+
+    setQuizSet((current) => ({
+      ...current,
+      sections: [
+        ...current.sections,
+        createEmptySection(nextSubject.id, nextSubject.name),
+      ],
+    }));
+  }
+
+  function removeSection(sectionId: string) {
+    if (locked) return;
+
+    setQuizSet((current) => {
+      if (current.sections.length <= 1) {
+        toast.error("A quiz set needs at least one subject section.");
+        return current;
+      }
+
+      return {
+        ...current,
+        sections: current.sections.filter((section) => section.id !== sectionId),
+      };
+    });
+  }
+
+  function changeSectionSubject(sectionId: string, subjectId: string) {
+    const subject = facultySubjects.find((item) => item.id === subjectId);
+    if (!subject) return;
+
+    updateSection(sectionId, (section) => ({
+      ...section,
+      subjectId: subject.id,
+      subjectName: subject.name,
     }));
   }
 
@@ -244,11 +320,11 @@ export function QuizDetailEditor({
         facultyId: quizSet.facultyId,
         isPublished: quizSet.isPublished,
         sections: quizSet.sections.map((section) => ({
-          id: section.id,
+          id: isClientDraftId(section.id, "sec-") ? undefined : section.id,
           subjectId: section.subjectId,
           fullMarks: sectionMarksTotal(section.questions),
           questions: section.questions.map((question) => ({
-            id: question.id.startsWith("q-") ? undefined : question.id,
+            id: isClientDraftId(question.id, "q-") ? undefined : question.id,
             prompt: question.prompt,
             marks: question.marks,
             options: question.options.map((option) => ({
@@ -447,37 +523,124 @@ export function QuizDetailEditor({
         </section>
       </div>
 
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Subject sections
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {locked
+              ? "Structure is locked because this quiz already has attempts."
+              : "Add subjects, paste questions, or edit existing sections."}
+          </p>
+        </div>
+        {!locked ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addSection}
+            disabled={
+              facultySubjects.length === 0 ||
+              usedSubjectIds.size >= facultySubjects.length
+            }
+          >
+            <Plus className="size-4" />
+            Add section
+          </Button>
+        ) : null}
+      </div>
+
       <div className="space-y-8">
-        {quizSet.sections.map((section) => (
+        {quizSet.sections.map((section) => {
+          const availableSubjects = facultySubjects.filter(
+            (subject) =>
+              subject.id === section.subjectId ||
+              !usedSubjectIds.has(subject.id),
+          );
+
+          return (
           <section
             key={section.id}
             className="overflow-hidden rounded-2xl border bg-card"
           >
             <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-4">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-xl border bg-background text-sm font-semibold">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-background text-sm font-semibold">
                   {section.subjectName.slice(0, 2).toUpperCase()}
                 </span>
-                <div>
-                  <h2 className="font-semibold tracking-tight">
-                    {section.subjectName}
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {sectionMarksTotal(section.questions)} marks ·{" "}
-                    {section.questions.length} questions
-                  </p>
-                </div>
+                {!locked ? (
+                  <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Subject
+                      </Label>
+                      <Select
+                        value={section.subjectId}
+                        onValueChange={(value) =>
+                          changeSectionSubject(section.id, value)
+                        }
+                      >
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue placeholder="Select subject" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSubjects.map((subject) => (
+                            <SelectItem key={subject.id} value={subject.id}>
+                              {subject.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Full marks
+                      </Label>
+                      <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                        {sectionMarksTotal(section.questions)}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (from question marks)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h2 className="font-semibold tracking-tight">
+                      {section.subjectName}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      {sectionMarksTotal(section.questions)} marks ·{" "}
+                      {section.questions.length} questions
+                    </p>
+                  </div>
+                )}
               </div>
               {!locked ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => addQuestion(section.id)}
-                >
-                  <Plus className="size-4" />
-                  Add question
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => addQuestion(section.id)}
+                  >
+                    <Plus className="size-4" />
+                    Add question
+                  </Button>
+                  {quizSet.sections.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => removeSection(section.id)}
+                      aria-label={`Delete ${section.subjectName} section`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
@@ -600,7 +763,8 @@ export function QuizDetailEditor({
               ))}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
