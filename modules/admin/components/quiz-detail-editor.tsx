@@ -808,8 +808,8 @@ export function QuizDetailEditor({
                           prompt: event.target.value,
                         })
                       }
-                      rows={2}
-                      className="min-h-18 flex-1 resize-none"
+                      rows={3}
+                      className="min-h-18 flex-1 resize-y whitespace-pre-wrap"
                       placeholder="Question prompt"
                     />
                     {!locked && section.questions.length > 1 ? (

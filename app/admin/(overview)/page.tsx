@@ -107,7 +107,7 @@ export default async function AdminOverviewPage() {
               "group bg-card p-4 transition-colors hover:bg-accent/50",
               index < 4 ? "border-b xl:border-b-0" : "",
               index % 2 === 0 ? "sm:border-r" : "",
-              index < 4 ? "xl:border-r" : "",
+              index < 4 ? "xl:border-r" : "xl:border-r-0",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -157,7 +157,7 @@ export default async function AdminOverviewPage() {
                   <li key={set.id}>
                     <Link
                       href={`/admin/quizzes/${set.id}`}
-                      className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-accent/40"
+                      className="group flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-accent/40"
                     >
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">

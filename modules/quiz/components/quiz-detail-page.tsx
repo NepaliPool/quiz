@@ -382,7 +382,7 @@ function SubjectSection({
             <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
               Q{question.position}
             </p>
-            <h3 className="mt-2 text-base font-medium leading-7 md:text-lg">
+            <h3 className="mt-2 whitespace-pre-wrap text-base font-medium leading-7 md:text-lg">
               {question.prompt}
             </h3>
 

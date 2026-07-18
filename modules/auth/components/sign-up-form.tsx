@@ -63,10 +63,13 @@ export function SignUpForm() {
           throw new Error(result.error.message ?? "Unable to create account.");
         }
 
-        const session = await authClient.getSession();
-        const role =
-          roleFromUnknown(session.data?.user) ??
-          roleFromUnknown(result.data?.user);
+        let role = roleFromUnknown(result.data?.user);
+        try {
+          const session = await authClient.getSession();
+          role = roleFromUnknown(session.data?.user) ?? role;
+        } catch {
+          // Session enrichment is best-effort; sign-up already succeeded.
+        }
 
         toast.success("Account created successfully.");
         router.push(postAuthPath(role));
