@@ -208,8 +208,11 @@ export function SectionQuestionsPastePanel({
           ) : null}
 
           <p className="text-xs text-muted-foreground">
-            Mark the correct option with{" "}
-            <code className="rounded bg-muted px-1">*</code> or add a line like{" "}
+            Numbered lists work too (
+            <code className="rounded bg-muted px-1">1. …</code> then stem, then{" "}
+            <code className="rounded bg-muted px-1">a–d</code>). Extra prompt
+            lines stay on separate lines. Mark the correct option with{" "}
+            <code className="rounded bg-muted px-1">*</code> or add{" "}
             <code className="rounded bg-muted px-1">Correct: C</code>.
             {!append
               ? " Replace mode overwrites this section’s questions."

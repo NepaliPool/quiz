@@ -17,12 +17,25 @@ export const siteConfig = {
 } as const;
 
 export function getSiteUrl() {
-  const raw =
+  const configured =
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.BETTER_AUTH_URL?.trim() ||
-    "http://localhost:3000";
+    process.env.BETTER_AUTH_URL?.trim();
 
-  return raw.replace(/\/$/, "");
+  if (!configured) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "NEXT_PUBLIC_APP_URL or BETTER_AUTH_URL must be configured",
+      );
+    }
+    return "http://localhost:3000";
+  }
+
+  const url = new URL(configured);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Application URL must use HTTP or HTTPS");
+  }
+
+  return url.toString().replace(/\/+$/, "");
 }
 
 export function absoluteUrl(path = "/") {

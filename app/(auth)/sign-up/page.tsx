@@ -4,7 +4,7 @@ import { SignUpForm } from "@/modules/auth/components/sign-up-form";
 
 export const metadata: Metadata = {
   title: "Create account",
-  description: "Create a QuizDesk admin account to manage assessments and access codes.",
+  description: "Create a QuizDesk account to access the platform.",
 };
 
 export default function SignUpPage() {
