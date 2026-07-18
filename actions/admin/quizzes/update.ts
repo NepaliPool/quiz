@@ -29,6 +29,27 @@ import {
 
 const POSITION_PARK = 1_000_000;
 
+export type UpdatedQuizSetSection = {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  questions: Array<{
+    id: string;
+    prompt: string;
+    marks: number;
+    options: Array<{
+      id: string;
+      label: string;
+      isCorrect: boolean;
+    }>;
+  }>;
+};
+
+export type UpdatedQuizSetResult = {
+  id: string;
+  sections: UpdatedQuizSetSection[];
+};
+
 type IncomingQuestion = UpdateQuizSetInput["sections"][number]["questions"][number];
 
 type ExistingQuestion = {
@@ -58,6 +79,60 @@ async function revalidateQuizPaths(quizSetId: string, facultySlug?: string) {
   }
 }
 
+async function loadUpdatedQuizSetResult(
+  quizSetId: string,
+): Promise<UpdatedQuizSetResult | null> {
+  const saved = await db.query.quizSets.findFirst({
+    where: eq(quizSets.id, quizSetId),
+    with: {
+      sections: {
+        orderBy: (table, { asc: orderAsc }) => [orderAsc(table.position)],
+        with: {
+          subject: {
+            columns: {
+              id: true,
+              name: true,
+            },
+          },
+          questions: {
+            orderBy: (table, { asc: orderAsc }) => [orderAsc(table.position)],
+            with: {
+              options: {
+                orderBy: (table, { asc: orderAsc }) => [
+                  orderAsc(table.position),
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!saved) {
+    return null;
+  }
+
+  return {
+    id: saved.id,
+    sections: saved.sections.map((section) => ({
+      id: section.id,
+      subjectId: section.subject.id,
+      subjectName: section.subject.name,
+      questions: section.questions.map((question) => ({
+        id: question.id,
+        prompt: question.prompt,
+        marks: question.marks,
+        options: question.options.map((option) => ({
+          id: option.id,
+          label: option.label,
+          isCorrect: option.isCorrect,
+        })),
+      })),
+    })),
+  };
+}
+
 function optionsMatch(
   existing: Array<{ label: string; isCorrect: boolean; position: number }>,
   next: Array<{ label: string; isCorrect: boolean }>,
@@ -82,8 +157,12 @@ function questionsUnchanged(
 ) {
   if (existing.length !== next.length) return false;
 
+  const sortedExisting = [...existing].sort(
+    (a, b) => a.position - b.position,
+  );
+
   return next.every((question, index) => {
-    const current = existing[index];
+    const current = sortedExisting[index];
     return (
       Boolean(current) &&
       Boolean(question.id) &&
@@ -157,7 +236,7 @@ export async function updateQuizSetMeta(
 
 export async function updateQuizSet(
   input: UpdateQuizSetInput,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<UpdatedQuizSetResult>> {
   const admin = await getCurrentAdmin();
 
   if (!admin.success) {
@@ -197,7 +276,7 @@ export async function updateQuizSet(
   const hasAttempts = await quizSetHasAttempts(data.id);
 
   if (hasAttempts) {
-    return updateQuizSetMeta({
+    const metaResult = await updateQuizSetMeta({
       id: data.id,
       title: data.title,
       slug: data.slug,
@@ -205,6 +284,18 @@ export async function updateQuizSet(
       durationMinutes: data.durationMinutes,
       isPublished: data.isPublished,
     });
+
+    if (!metaResult.success) {
+      return metaResult;
+    }
+
+    const saved = await loadUpdatedQuizSetResult(data.id);
+
+    if (!saved) {
+      return actionFailure("Quiz set was saved but could not be reloaded.");
+    }
+
+    return actionSuccess(saved, metaResult.message ?? "Quiz set updated.");
   }
 
   const subjectIds = data.sections.map((section) => section.subjectId);
@@ -261,8 +352,13 @@ export async function updateQuizSet(
         where: eq(quizSections.quizSetId, data.id),
         with: {
           questions: {
+            orderBy: (table, { asc: orderAsc }) => [orderAsc(table.position)],
             with: {
-              options: true,
+              options: {
+                orderBy: (table, { asc: orderAsc }) => [
+                  orderAsc(table.position),
+                ],
+              },
             },
           },
         },
@@ -377,11 +473,12 @@ export async function updateQuizSet(
 
         for (const [questionIndex, question] of section.questions.entries()) {
           const position = questionIndex + 1;
+          const questionId = question.id;
 
-          if (!question.id) {
-            const questionId = crypto.randomUUID();
+          if (!questionId) {
+            const newQuestionId = crypto.randomUUID();
             questionsToInsert.push({
-              id: questionId,
+              id: newQuestionId,
               quizSectionId: sectionId,
               prompt: question.prompt,
               marks: question.marks,
@@ -391,7 +488,7 @@ export async function updateQuizSet(
             for (const [optionIndex, option] of question.options.entries()) {
               optionsToInsert.push({
                 id: crypto.randomUUID(),
-                questionId,
+                questionId: newQuestionId,
                 label: option.label,
                 position: (optionIndex + 1) as 1 | 2 | 3 | 4,
                 isCorrect: option.isCorrect,
@@ -400,7 +497,10 @@ export async function updateQuizSet(
             continue;
           }
 
-          const existingQuestion = existingQuestionById.get(question.id);
+          const existingQuestion = existingQuestionById.get(questionId);
+          if (!existingQuestion) {
+            throw new Error("INVALID_QUESTION_SECTION");
+          }
 
           questionUpdates.push(() =>
             tx
@@ -412,18 +512,18 @@ export async function updateQuizSet(
               })
               .where(
                 and(
-                  eq(questions.id, question.id!),
+                  eq(questions.id, questionId),
                   eq(questions.quizSectionId, sectionId),
                 ),
               ),
           );
 
-          const shouldRewriteOptions =
-            !existingQuestion ||
-            !optionsMatch(existingQuestion.options, question.options);
+          const shouldRewriteOptions = !optionsMatch(
+            existingQuestion.options,
+            question.options,
+          );
 
           if (shouldRewriteOptions) {
-            const questionId = question.id;
             optionRewriteDeletes.push(() =>
               tx.delete(options).where(eq(options.questionId, questionId)),
             );
@@ -476,6 +576,13 @@ export async function updateQuizSet(
   } catch (error) {
     console.error("updateQuizSet failed:", error);
 
+    if (error instanceof Error && error.message === "INVALID_QUESTION_SECTION") {
+      return actionFailure(
+        "One or more questions do not belong to this quiz section.",
+        { sections: "Invalid question selection." },
+      );
+    }
+
     if (isUniqueViolation(error)) {
       return actionFailure(
         "Could not save quiz structure due to a uniqueness conflict.",
@@ -485,6 +592,12 @@ export async function updateQuizSet(
     return actionFailure("Could not update quiz set. Please try again.");
   }
 
+  const saved = await loadUpdatedQuizSetResult(data.id);
+
+  if (!saved) {
+    return actionFailure("Quiz set was saved but could not be reloaded.");
+  }
+
   await revalidateQuizPaths(data.id, existing.faculty.slug);
-  return actionSuccess({ id: data.id }, "Quiz set updated.");
+  return actionSuccess(saved, "Quiz set updated.");
 }

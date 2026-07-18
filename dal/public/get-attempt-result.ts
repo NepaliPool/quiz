@@ -393,13 +393,8 @@ export async function getAttemptResult({
 }: {
   facultySlug: string;
   quizSetSlug: string;
-  attemptId?: string;
-  code?: string;
-}): Promise<AttemptResultSummary | AttemptAnswerSheet | null> {
-  if (!code) {
-    return null;
-  }
-
+  code: string;
+}): Promise<AttemptAnswerSheet | null> {
   return getAttemptAnswerSheetByCode({
     facultySlug,
     quizSetSlug,

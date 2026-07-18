@@ -386,7 +386,27 @@ export function QuizDetailEditor({
         return;
       }
 
-      structureBaselineRef.current = structureSignature(quizSet.sections);
+      const nextState: EditorState = {
+        ...quizSet,
+        sections: result.data.sections.map((section) => ({
+          id: section.id,
+          subjectId: section.subjectId,
+          subjectName: section.subjectName,
+          questions: section.questions.map((question) => ({
+            id: question.id,
+            prompt: question.prompt,
+            marks: question.marks,
+            options: question.options.map((option) => ({
+              id: option.id,
+              label: option.label,
+              isCorrect: option.isCorrect,
+            })),
+          })),
+        })),
+      };
+
+      setQuizSet(nextState);
+      structureBaselineRef.current = structureSignature(nextState.sections);
       toast.success(result.message ?? "Saved.");
       router.refresh();
     });
