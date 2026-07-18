@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { getZodFieldErrors } from "@/lib/action-result";
 import { slugify } from "@/lib/slugify";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
+import { QuizQuestionsPreviewTrigger } from "@/modules/admin/components/quiz-questions-preview";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import {
   updateQuizSetMetaSchema,
@@ -649,20 +650,33 @@ export function QuizDetailEditor({
               : "Add subjects, paste questions, or edit existing sections."}
           </p>
         </div>
-        {!locked ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addSection}
-            disabled={
-              !facultySubjects.some((subject) => !usedSubjectIds.has(subject.id))
-            }
-          >
-            <Plus className="size-4" />
-            Add section
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <QuizQuestionsPreviewTrigger
+            quizTitle={quizSet.title.trim() || "Untitled quiz"}
+            label="Preview quiz"
+            sections={quizSet.sections.map((section) => ({
+              id: section.id,
+              subjectName: section.subjectName,
+              questions: section.questions,
+            }))}
+          />
+          {!locked ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSection}
+              disabled={
+                !facultySubjects.some(
+                  (subject) => !usedSubjectIds.has(subject.id),
+                )
+              }
+            >
+              <Plus className="size-4" />
+              Add section
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-8">
@@ -678,8 +692,8 @@ export function QuizDetailEditor({
             key={section.id}
             className="overflow-hidden border bg-card"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-4">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b bg-muted/40 px-5 py-4">
+              <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center border bg-background text-sm font-semibold">
                   {section.subjectName.slice(0, 2).toUpperCase()}
                 </span>
@@ -733,6 +747,16 @@ export function QuizDetailEditor({
               </div>
               {!locked ? (
                 <div className="flex items-center gap-2">
+                  <QuizQuestionsPreviewTrigger
+                    label="Preview"
+                    sections={[
+                      {
+                        id: section.id,
+                        subjectName: section.subjectName,
+                        questions: section.questions,
+                      },
+                    ]}
+                  />
                   <Button
                     type="button"
                     size="sm"
@@ -760,7 +784,18 @@ export function QuizDetailEditor({
                     </Button>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <QuizQuestionsPreviewTrigger
+                  label="Preview"
+                  sections={[
+                    {
+                      id: section.id,
+                      subjectName: section.subjectName,
+                      questions: section.questions,
+                    },
+                  ]}
+                />
+              )}
             </div>
 
             {!locked ? (

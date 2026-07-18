@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   accessCodes,
   attemptAnswers,
+  faculties,
   quizAttempts,
   quizSections,
   quizSets,
@@ -87,28 +88,43 @@ function buildSectionScores(
 }
 
 async function getQuizSetContext(facultySlug: string, quizSetSlug: string) {
+  const faculty = await db.query.faculties.findFirst({
+    where: eq(faculties.slug, facultySlug),
+    columns: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  if (!faculty) {
+    return null;
+  }
+
   const quizSet = await db.query.quizSets.findFirst({
-    where: and(eq(quizSets.slug, quizSetSlug), eq(quizSets.isPublished, true)),
+    where: and(
+      eq(quizSets.facultyId, faculty.id),
+      eq(quizSets.slug, quizSetSlug),
+      eq(quizSets.isPublished, true),
+    ),
     columns: {
       id: true,
       title: true,
       slug: true,
     },
-    with: {
-      faculty: {
-        columns: {
-          name: true,
-          slug: true,
-        },
-      },
-    },
   });
 
-  if (!quizSet || quizSet.faculty.slug !== facultySlug) {
+  if (!quizSet) {
     return null;
   }
 
-  return quizSet;
+  return {
+    ...quizSet,
+    faculty: {
+      name: faculty.name,
+      slug: faculty.slug,
+    },
+  };
 }
 
 async function loadAttemptAnswers(attemptId: string) {

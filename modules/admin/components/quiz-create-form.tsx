@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slugify";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
+import { QuizQuestionsPreviewTrigger } from "@/modules/admin/components/quiz-questions-preview";
 import {
   createQuizSetSchema,
   type CreateQuizSetInput,
@@ -436,20 +437,32 @@ export function QuizCreateForm({
             Example: English 50, Maths 40, Science 45, GK 30
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setSections((current) => [
-              ...current,
-              createEmptySection(facultySubjects[0]?.id ?? ""),
-            ])
-          }
-        >
-          <Plus className="size-4" />
-          Add section
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <QuizQuestionsPreviewTrigger
+            quizTitle={title.trim() || "Untitled quiz"}
+            label="Preview quiz"
+            sections={sections.map((section) => ({
+              id: section.id,
+              subjectName:
+                subjectNameById[section.subjectId] ?? "Subject section",
+              questions: section.questions,
+            }))}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setSections((current) => [
+                ...current,
+                createEmptySection(facultySubjects[0]?.id ?? ""),
+              ])
+            }
+          >
+            <Plus className="size-4" />
+            Add section
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-8">
@@ -462,8 +475,8 @@ export function QuizCreateForm({
               key={section.id}
               className="overflow-hidden border bg-card"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-4">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-3 border-b bg-muted/40 px-5 py-4">
+                <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center border bg-background text-sm font-semibold">
                     {subjectName.slice(0, 2).toUpperCase()}
                   </span>
@@ -508,6 +521,16 @@ export function QuizCreateForm({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <QuizQuestionsPreviewTrigger
+                    label="Preview"
+                    sections={[
+                      {
+                        id: section.id,
+                        subjectName,
+                        questions: section.questions,
+                      },
+                    ]}
+                  />
                   <Button
                     type="button"
                     size="sm"

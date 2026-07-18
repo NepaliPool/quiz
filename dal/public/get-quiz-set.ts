@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { quizSets } from "@/db/schema";
+import { faculties, quizSets } from "@/db/schema";
 
 export type PublicQuizOption = {
   id: string;
@@ -47,16 +47,26 @@ export async function getPublishedQuizSetByFacultyAndSlug(
   facultySlug: string,
   quizSetSlug: string,
 ): Promise<PublicQuizSetDetail | null> {
+  const faculty = await db.query.faculties.findFirst({
+    where: eq(faculties.slug, facultySlug),
+    columns: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  if (!faculty) {
+    return null;
+  }
+
   const quizSet = await db.query.quizSets.findFirst({
-    where: and(eq(quizSets.slug, quizSetSlug), eq(quizSets.isPublished, true)),
+    where: and(
+      eq(quizSets.facultyId, faculty.id),
+      eq(quizSets.slug, quizSetSlug),
+      eq(quizSets.isPublished, true),
+    ),
     with: {
-      faculty: {
-        columns: {
-          id: true,
-          name: true,
-          slug: true,
-        },
-      },
       sections: {
         orderBy: (table, { asc: orderAsc }) => [orderAsc(table.position)],
         with: {
@@ -86,7 +96,7 @@ export async function getPublishedQuizSetByFacultyAndSlug(
     },
   });
 
-  if (!quizSet || quizSet.faculty.slug !== facultySlug) {
+  if (!quizSet) {
     return null;
   }
 
@@ -116,7 +126,7 @@ export async function getPublishedQuizSetByFacultyAndSlug(
     slug: quizSet.slug,
     description: quizSet.description,
     durationMinutes: quizSet.durationMinutes,
-    faculty: quizSet.faculty,
+    faculty,
     sections,
     questionCount: sections.reduce(
       (sum, section) => sum + section.questions.length,
