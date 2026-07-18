@@ -97,6 +97,10 @@ export function SubjectsManager({
       list.searchParams.get("page"),
   );
   const resultsPending = list.isPending || isFetching;
+  const facultySelectValue =
+    facultyId === "all"
+      ? "all"
+      : (faculties.find((faculty) => faculty.id === facultyId)?.slug ?? "all");
 
   async function invalidateSubjectLists() {
     await Promise.all([
@@ -186,7 +190,7 @@ export function SubjectsManager({
           placeholder="Search by subject name"
           filters={
             <Select
-              value={facultyParam}
+              value={facultySelectValue}
               onValueChange={(value) => list.setParam("faculty", value)}
             >
               <SelectTrigger className="w-full sm:w-56">
@@ -251,6 +255,7 @@ export function SubjectsManager({
                               size="icon"
                               variant="ghost"
                               disabled={isMutating}
+                              aria-label={`Edit ${subject.name}`}
                               onClick={() => openEdit(subject)}
                             >
                               <Pencil className="size-4" />
@@ -260,6 +265,7 @@ export function SubjectsManager({
                               variant="ghost"
                               disabled={isMutating}
                               className="hover:bg-destructive/10 hover:text-destructive"
+                              aria-label={`Delete ${subject.name}`}
                               onClick={() => setPendingDelete(subject)}
                             >
                               <Trash2 className="size-4" />

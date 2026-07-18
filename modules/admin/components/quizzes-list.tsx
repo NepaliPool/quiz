@@ -81,12 +81,26 @@ export function QuizzesList({
       list.searchParams.get("page"),
   );
   const resultsPending = list.isPending || isFetching;
+  const facultySelectValue =
+    facultyId === "all"
+      ? "all"
+      : (faculties.find((faculty) => faculty.id === facultyId)?.slug ?? "all");
 
   function updateFaculty(nextFacultyParam: string) {
     const nextFacultyId = resolveFacultyId(nextFacultyParam, faculties);
+    const resolvedSubjectId = resolveSubjectId(
+      subjectParam,
+      subjects,
+      nextFacultyId,
+    );
     const stillValid =
       subjectParam === "all" ||
-      resolveSubjectId(subjectParam, subjects, nextFacultyId) !== "all";
+      nextFacultyId === "all" ||
+      subjects.some(
+        (subject) =>
+          subject.id === resolvedSubjectId &&
+          subject.facultyId === nextFacultyId,
+      );
 
     list.setParams({
       faculty: nextFacultyParam,
@@ -262,7 +276,7 @@ export function QuizzesList({
         placeholder="Search by title or slug"
         filters={
           <>
-            <Select value={facultyParam} onValueChange={updateFaculty}>
+            <Select value={facultySelectValue} onValueChange={updateFaculty}>
               <SelectTrigger className="w-full sm:w-56">
                 <SelectValue placeholder="Faculty" />
               </SelectTrigger>
@@ -358,7 +372,9 @@ export function QuizzesList({
                               <Switch
                                 id={publishControlId}
                                 checked={isPublished}
-                                disabled={Boolean(togglingIds[set.id])}
+                                disabled={
+                                  resultsPending || Boolean(togglingIds[set.id])
+                                }
                                 aria-label={
                                   isPublished
                                     ? `Unpublish ${set.title}`

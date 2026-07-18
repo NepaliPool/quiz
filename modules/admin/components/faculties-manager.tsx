@@ -214,6 +214,7 @@ export function FacultiesManager() {
                               size="icon"
                               variant="ghost"
                               disabled={isMutating}
+                              aria-label={`Edit ${faculty.name}`}
                               onClick={() => openEdit(faculty)}
                             >
                               <Pencil className="size-4" />
@@ -223,6 +224,7 @@ export function FacultiesManager() {
                               variant="ghost"
                               disabled={isMutating}
                               className="hover:bg-destructive/10 hover:text-destructive"
+                              aria-label={`Delete ${faculty.name}`}
                               onClick={() => setPendingDelete(faculty)}
                             >
                               <Trash2 className="size-4" />

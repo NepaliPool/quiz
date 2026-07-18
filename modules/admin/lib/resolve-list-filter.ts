@@ -49,8 +49,12 @@ export function resolveSubjectId(
   }
 
   // Legacy URL with subject id while faculty filter is "all"
-  const byIdAny = subjects.find((subject) => subject.id === param);
-  return byIdAny?.id ?? "all";
+  if (facultyId === "all") {
+    const byIdAny = subjects.find((subject) => subject.id === param);
+    return byIdAny?.id ?? "all";
+  }
+
+  return "all";
 }
 
 export function subjectParamValue(name: string) {

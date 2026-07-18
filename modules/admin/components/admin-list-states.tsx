@@ -80,9 +80,10 @@ export function AdminListResults({
         </div>
       ) : null}
       <div
+        inert={isPending ? true : undefined}
         className={
           isPending
-            ? "opacity-50 transition-opacity duration-150"
+            ? "pointer-events-none opacity-50 transition-opacity duration-150"
             : "opacity-100 transition-opacity duration-150"
         }
       >

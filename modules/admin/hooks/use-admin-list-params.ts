@@ -124,7 +124,9 @@ export function useAdminListParams() {
   /** Debounced/committed `q` from the URL — use for query keys, not live input. */
   const committedQuery = workingParams.get("q") ?? "";
   const pageFromUrl = Number(workingParams.get("page") ?? "1");
-  const page = Number.isFinite(pageFromUrl) ? Math.max(1, pageFromUrl) : 1;
+  const page = Number.isFinite(pageFromUrl)
+    ? Math.max(1, Math.floor(pageFromUrl))
+    : 1;
 
   function setPage(nextPage: number) {
     const safePage = Math.max(1, nextPage);

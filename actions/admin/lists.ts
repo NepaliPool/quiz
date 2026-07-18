@@ -26,7 +26,7 @@ export async function listUsers(input: {
   page?: number;
 }): Promise<UserListResult> {
   await assertAdmin();
-  return getUsers({ ...input, skipAuth: true });
+  return getUsers(input);
 }
 
 export async function listAccessCodes(input: {
@@ -36,7 +36,7 @@ export async function listAccessCodes(input: {
   page?: number;
 }): Promise<AccessCodeListResult> {
   await assertAdmin();
-  return getAccessCodes({ ...input, skipAuth: true });
+  return getAccessCodes(input);
 }
 
 export async function listQuizSets(input: {
@@ -46,7 +46,7 @@ export async function listQuizSets(input: {
   page?: number;
 }): Promise<QuizSetListResult> {
   await assertAdmin();
-  return getQuizSets({ ...input, skipAuth: true });
+  return getQuizSets(input);
 }
 
 export async function listFaculties(input: {
@@ -54,7 +54,7 @@ export async function listFaculties(input: {
   page?: number;
 }): Promise<FacultyListResult> {
   await assertAdmin();
-  return getFaculties({ ...input, skipAuth: true });
+  return getFaculties(input);
 }
 
 export async function listSubjects(input: {
@@ -63,5 +63,5 @@ export async function listSubjects(input: {
   page?: number;
 }): Promise<SubjectListResult> {
   await assertAdmin();
-  return getSubjects({ ...input, skipAuth: true });
+  return getSubjects(input);
 }

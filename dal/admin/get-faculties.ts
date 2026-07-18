@@ -30,16 +30,12 @@ export async function getFaculties({
   q = "",
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
-  skipAuth = false,
 }: {
   q?: string;
   page?: number;
   pageSize?: number;
-  skipAuth?: boolean;
 } = {}): Promise<FacultyListResult> {
-  if (!skipAuth) {
-    await requireAdminForDal();
-  }
+  await requireAdminForDal();
 
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
   const safePage = Math.max(1, page);

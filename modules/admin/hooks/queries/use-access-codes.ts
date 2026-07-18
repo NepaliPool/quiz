@@ -12,19 +12,39 @@ import {
   type AccessCodesListFilters,
 } from "@/modules/admin/hooks/queries/keys";
 
+const ACCESS_CODE_STATUSES = new Set<AccessCodeStatus>([
+  "available",
+  "issued",
+  "used",
+  "expired",
+]);
+
+function parseAccessCodeStatus(
+  status: string,
+): "all" | AccessCodeStatus {
+  if (status === "all") {
+    return "all";
+  }
+
+  if (ACCESS_CODE_STATUSES.has(status as AccessCodeStatus)) {
+    return status as AccessCodeStatus;
+  }
+
+  return "all";
+}
+
 export function useAccessCodesQuery(
   filters: AccessCodesListFilters,
   options?: { initialData?: AccessCodeListResult },
 ) {
+  const status = parseAccessCodeStatus(filters.status);
+
   return useQuery({
-    queryKey: adminKeys.accessCodes(filters),
+    queryKey: adminKeys.accessCodes({ ...filters, status }),
     queryFn: () =>
       listAccessCodes({
         q: filters.q,
-        status:
-          filters.status === "all"
-            ? "all"
-            : (filters.status as AccessCodeStatus),
+        status,
         quizSetId: filters.quizSetId === "all" ? undefined : filters.quizSetId,
         page: filters.page,
       }),
