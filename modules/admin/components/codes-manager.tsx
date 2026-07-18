@@ -1,7 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ import {
   AdminListResults,
   AdminListToolbar,
   AdminPagination,
+  AdminTableSkeleton,
 } from "@/modules/admin/components/admin-list-states";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
@@ -55,6 +56,8 @@ import type {
 } from "@/dal/admin/get-access-codes";
 import type { QuizSetOption } from "@/dal/admin/get-quiz-sets";
 import { getZodFieldErrors } from "@/lib/action-result";
+import { adminKeys } from "@/modules/admin/hooks/queries/keys";
+import { useAccessCodesQuery } from "@/modules/admin/hooks/queries/use-access-codes";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
 import {
   generateAccessCodesSchema,
@@ -68,23 +71,29 @@ type CodeForm = {
 };
 
 export function CodesManager({
-  data,
   quizOptions,
   publishedQuizOptions,
 }: {
-  data: AccessCodeListResult;
   quizOptions: QuizSetOption[];
   publishedQuizOptions: QuizSetOption[];
 }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const list = useAdminListParams();
   const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isMutating, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<
     AccessCodeListResult["items"][number] | null
   >(null);
   const statusFilter = list.getParam("status");
   const quizFilter = list.getParam("quiz");
+  const filters = {
+    q: list.committedQuery,
+    status: statusFilter,
+    quizSetId: quizFilter,
+    page: list.page,
+  };
+  const { data, isPending, isFetching, isError, error } =
+    useAccessCodesQuery(filters);
   const [form, setForm] = useState<CodeForm>({
     quizSetId: publishedQuizOptions[0]?.id ?? "",
     quantity: "10",
@@ -112,6 +121,10 @@ export function CodesManager({
   }, [copiedCodeId]);
 
   useEffect(() => {
+    if (!data) {
+      return;
+    }
+
     setIssuedOverrides((current) => {
       if (Object.keys(current).length === 0) {
         return current;
@@ -129,15 +142,22 @@ export function CodesManager({
 
       return changed ? next : current;
     });
-  }, [data.items]);
+  }, [data]);
 
-  const showPagination = data.total > data.pageSize;
+  const showPagination = data ? data.total > data.pageSize : false;
   const hasActiveFilters = Boolean(
     list.query.trim() ||
       statusFilter !== "all" ||
       quizFilter !== "all" ||
       list.searchParams.get("page"),
   );
+  const resultsPending = list.isPending || isFetching;
+
+  async function invalidateCodes() {
+    await queryClient.invalidateQueries({
+      queryKey: adminKeys.accessCodesRoot(),
+    });
+  }
 
   function openCreate() {
     setForm({
@@ -182,7 +202,7 @@ export function CodesManager({
 
       toast.success(result.message ?? "Codes generated.");
       setOpen(false);
-      router.refresh();
+      await invalidateCodes();
     });
   }
 
@@ -200,7 +220,7 @@ export function CodesManager({
       }
 
       toast.success(result.message ?? "Deleted.");
-      router.refresh();
+      await invalidateCodes();
     });
   }
 
@@ -255,7 +275,7 @@ export function CodesManager({
           result.message ??
             (nextIssued ? "Marked as issued." : "Released back to available."),
         );
-        router.refresh();
+        await invalidateCodes();
       } catch {
         setIssuedOverrides((current) => {
           const next = { ...current };
@@ -299,7 +319,7 @@ export function CodesManager({
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters(["status", "quiz"])}
           showClear={hasActiveFilters}
-          isPending={list.isPending}
+          isPending={resultsPending}
           placeholder="Search by code"
           filters={
             <>
@@ -353,120 +373,133 @@ export function CodesManager({
           }
         />
 
-        <AdminListResults isPending={list.isPending}>
-        {data.items.length === 0 ? (
+        {isPending && !data ? (
+          <AdminTableSkeleton columns={7} />
+        ) : isError ? (
           <AdminEmptyState
-            title="No codes found"
-            description={
-              publishedQuizOptions.length === 0
-                ? "Publish a quiz set before generating access codes."
-                : "Try a different search or filter, or generate new codes."
-            }
+            title="Couldn’t load codes"
+            description={error instanceof Error ? error.message : "Try again."}
           />
-        ) : (
-          <div className="overflow-hidden border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Quiz set</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Issued</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-20 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.map((code) => {
-                  const isIssued = resolveIssued(code);
-                  const status = resolveStatus(code);
-                  const canToggleIssued =
-                    status === "available" || status === "issued";
-
-                  return (
-                    <TableRow key={code.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono font-medium">
-                            {code.code}
-                          </span>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-                            aria-label={
-                              copiedCodeId === code.id
-                                ? `${code.code} copied`
-                                : `Copy ${code.code}`
-                            }
-                            title={
-                              copiedCodeId === code.id ? "Copied" : "Copy code"
-                            }
-                            onClick={() => handleCopyCode(code)}
-                          >
-                            {copiedCodeId === code.id ? (
-                              <Check className="size-3.5 text-foreground" />
-                            ) : (
-                              <Copy className="size-3.5" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell>{code.quizSetTitle}</TableCell>
-                      <TableCell>
-                        <AccessCodeStatusLabel status={status} />
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={isIssued}
-                          disabled={!canToggleIssued || Boolean(togglingIds[code.id])}
-                          aria-label={
-                            isIssued
-                              ? `Release ${code.code}`
-                              : `Mark ${code.code} as issued`
-                          }
-                          onCheckedChange={(checked) =>
-                            handleIssuedToggle(code, checked)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {code.expiresAt ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {code.createdAt}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={isPending || code.hasAttempt}
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                          aria-label={`Delete ${code.code}`}
-                          onClick={() => setPendingDelete(code)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            {showPagination ? (
-              <AdminPagination
-                page={data.page}
-                pageCount={data.pageCount}
-                totalItems={data.total}
-                pageSize={data.pageSize}
-                onPageChange={list.setPage}
+        ) : data ? (
+          <AdminListResults isPending={resultsPending}>
+            {data.items.length === 0 ? (
+              <AdminEmptyState
+                title="No codes found"
+                description={
+                  publishedQuizOptions.length === 0
+                    ? "Publish a quiz set before generating access codes."
+                    : "Try a different search or filter, or generate new codes."
+                }
               />
-            ) : null}
-          </div>
-        )}
-        </AdminListResults>
+            ) : (
+              <div className="overflow-hidden border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Quiz set</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Issued</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="w-20 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.items.map((code) => {
+                      const isIssued = resolveIssued(code);
+                      const status = resolveStatus(code);
+                      const canToggleIssued =
+                        status === "available" || status === "issued";
+
+                      return (
+                        <TableRow key={code.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono font-medium">
+                                {code.code}
+                              </span>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                aria-label={
+                                  copiedCodeId === code.id
+                                    ? `${code.code} copied`
+                                    : `Copy ${code.code}`
+                                }
+                                title={
+                                  copiedCodeId === code.id
+                                    ? "Copied"
+                                    : "Copy code"
+                                }
+                                onClick={() => handleCopyCode(code)}
+                              >
+                                {copiedCodeId === code.id ? (
+                                  <Check className="size-3.5 text-foreground" />
+                                ) : (
+                                  <Copy className="size-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>{code.quizSetTitle}</TableCell>
+                          <TableCell>
+                            <AccessCodeStatusLabel status={status} />
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={isIssued}
+                              disabled={
+                                !canToggleIssued || Boolean(togglingIds[code.id])
+                              }
+                              aria-label={
+                                isIssued
+                                  ? `Release ${code.code}`
+                                  : `Mark ${code.code} as issued`
+                              }
+                              onCheckedChange={(checked) =>
+                                handleIssuedToggle(code, checked)
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {code.expiresAt ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {code.createdAt}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isMutating || code.hasAttempt}
+                              className="hover:bg-destructive/10 hover:text-destructive"
+                              aria-label={`Delete ${code.code}`}
+                              onClick={() => setPendingDelete(code)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {showPagination ? (
+                  <AdminPagination
+                    page={data.page}
+                    pageCount={data.pageCount}
+                    totalItems={data.total}
+                    pageSize={data.pageSize}
+                    onPageChange={list.setPage}
+                  />
+                ) : null}
+              </div>
+            )}
+          </AdminListResults>
+        ) : null}
       </div>
 
       <ConfirmDeleteDialog
@@ -482,7 +515,7 @@ export function CodesManager({
         }
         confirmLabel="Delete code"
         requireTypedConfirm
-        isPending={isPending}
+        isPending={isMutating}
         onConfirm={confirmDelete}
       />
 
@@ -577,7 +610,7 @@ export function CodesManager({
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isPending}>
+            <Button onClick={handleSave} disabled={isMutating}>
               Generate {form.quantity || "…"} codes
             </Button>
           </SheetFooter>

@@ -23,6 +23,7 @@ export type FacultyListResult = {
 export type FacultyOption = {
   id: string;
   name: string;
+  slug: string;
 };
 
 export async function getFaculties({
@@ -86,6 +87,7 @@ export async function getFacultyOptions(): Promise<FacultyOption[]> {
     .select({
       id: faculties.id,
       name: faculties.name,
+      slug: faculties.slug,
     })
     .from(faculties)
     .orderBy(asc(faculties.name));

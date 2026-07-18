@@ -22,7 +22,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type {
   PublicQuizSection,
-  PublicQuizSetDetail,
+  PublicQuizSetMeta,
 } from "@/dal/public/get-quiz-set";
 import { cn } from "@/lib/utils";
 import { PublicPageShell } from "@/modules/public/components/public-page-shell";
@@ -36,7 +36,7 @@ type Step = "code" | "taking";
 
 const OPTION_LETTERS = ["A", "B", "C", "D"] as const;
 
-function resultHref(quizSet: PublicQuizSetDetail, code: string) {
+function resultHref(quizSet: PublicQuizSetMeta, code: string) {
   return `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/result?code=${encodeURIComponent(code)}`;
 }
 
@@ -44,7 +44,7 @@ export function QuizDetailPage({
   quizSet,
   initialCode,
 }: {
-  quizSet: PublicQuizSetDetail;
+  quizSet: PublicQuizSetMeta;
   initialCode?: string;
 }) {
   const router = useRouter();
@@ -55,6 +55,7 @@ export function QuizDetailPage({
   const [isVerifying, setIsVerifying] = useState(Boolean(initialCode));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string>();
+  const [sections, setSections] = useState<PublicQuizSection[] | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const totalMarks = quizSet.totalMarks;
@@ -101,8 +102,15 @@ export function QuizDetailPage({
         return;
       }
 
+      if (!response.data.sections?.length) {
+        setCodeError("This quiz set has no questions yet.");
+        toast.error("This quiz set has no questions yet.");
+        return;
+      }
+
       setAttemptId(response.data.attemptId);
       setAccessCode(parsed.data.code);
+      setSections(response.data.sections);
       setStep("taking");
       toast.success(
         response.message ??
@@ -287,69 +295,69 @@ export function QuizDetailPage({
         </section>
       )}
 
-      {step === "taking" && (
+      {step === "taking" && sections ? (
         <ContentLeakGuard
           watermark={`${quizSet.title} · ${accessCode.trim().toUpperCase() || "QuizDesk"}`}
         >
-        <section className="space-y-10">
-          <div className="sticky top-0 z-10 -mx-6 border-b bg-background/95 px-6 py-4 backdrop-blur">
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <p className="text-muted-foreground">
-                {answeredCount} of {totalQuestions} answered
-              </p>
-              <p className="font-medium">{progress}%</p>
+          <section className="space-y-10">
+            <div className="sticky top-0 z-10 -mx-6 border-b bg-background/95 px-6 py-4 backdrop-blur">
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <p className="text-muted-foreground">
+                  {answeredCount} of {totalQuestions} answered
+                </p>
+                <p className="font-medium">{progress}%</p>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden border bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {sections.map((section) => {
+                  const done = section.questions.every((q) => answers[q.id]);
+                  return (
+                    <a
+                      key={section.id}
+                      href={`#section-${section.id}`}
+                      className={cn(
+                        "border px-3 py-1 text-xs transition-colors",
+                        done
+                          ? "border-foreground bg-foreground text-background"
+                          : "hover:bg-muted",
+                      )}
+                    >
+                      {section.subject.name}
+                    </a>
+                  );
+                })}
+              </div>
             </div>
-            <div className="mt-3 h-2 overflow-hidden border bg-muted">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${progress}%` }}
+
+            {sections.map((section) => (
+              <SubjectSection
+                key={section.id}
+                section={section}
+                answers={answers}
+                disabled={isSubmitting}
+                onSelect={selectOption}
               />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {quizSet.sections.map((section) => {
-                const done = section.questions.every((q) => answers[q.id]);
-                return (
-                  <a
-                    key={section.id}
-                    href={`#section-${section.id}`}
-                    className={cn(
-                      "border px-3 py-1 text-xs transition-colors",
-                      done
-                        ? "border-foreground bg-foreground text-background"
-                        : "hover:bg-muted",
-                    )}
-                  >
-                    {section.subject.name}
-                  </a>
-                );
-              })}
-            </div>
-          </div>
+            ))}
 
-          {quizSet.sections.map((section) => (
-            <SubjectSection
-              key={section.id}
-              section={section}
-              answers={answers}
-              disabled={isSubmitting}
-              onSelect={selectOption}
-            />
-          ))}
-
-          <div className="flex justify-end border-t pt-6">
-            <Button
-              type="button"
-              size="lg"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Submitting..." : "Submit entire set"}
-              <CheckCircle2 className="size-4" />
-            </Button>
-          </div>
-        </section>
+            <div className="flex justify-end border-t pt-6">
+              <Button
+                type="button"
+                size="lg"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Submitting..." : "Submit entire set"}
+                <CheckCircle2 className="size-4" />
+              </Button>
+            </div>
+          </section>
         </ContentLeakGuard>
-      )}
+      ) : null}
     </PublicPageShell>
   );
 }
@@ -406,7 +414,8 @@ function SubjectSection({
                       selected
                         ? "border-foreground bg-muted"
                         : "hover:bg-muted/60",
-                      disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
+                      disabled &&
+                        "cursor-not-allowed opacity-60 hover:bg-transparent",
                       disabled && selected && "hover:bg-muted",
                     )}
                   >

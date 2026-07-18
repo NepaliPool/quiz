@@ -17,6 +17,10 @@ import {
   quizSets,
 } from "@/db/schema";
 import {
+  getPublishedQuizQuestionsForAttempt,
+  type PublicQuizSection,
+} from "@/dal/public/get-quiz-set";
+import {
   startAttemptSchema,
   type StartAttemptInput,
 } from "@/modules/quiz/schemas/attempt";
@@ -25,7 +29,29 @@ export type StartAttemptResult = {
   attemptId: string;
   resumed: boolean;
   completed?: boolean;
+  /** Take payload — omitted when redirecting to results. */
+  sections?: PublicQuizSection[];
 };
+
+async function withQuestions(
+  attemptId: string,
+  payload: Omit<StartAttemptResult, "sections">,
+  message: string,
+): Promise<ActionResult<StartAttemptResult>> {
+  const sections = await getPublishedQuizQuestionsForAttempt(attemptId);
+
+  if (!sections || sections.length === 0) {
+    return actionFailure("This quiz set has no questions yet.");
+  }
+
+  return actionSuccess(
+    {
+      ...payload,
+      sections,
+    },
+    message,
+  );
+}
 
 export async function startAttempt(
   input: StartAttemptInput,
@@ -96,7 +122,8 @@ export async function startAttempt(
       );
     }
 
-    return actionSuccess(
+    return withQuestions(
+      accessCode.attempt.id,
       {
         attemptId: accessCode.attempt.id,
         resumed: true,
@@ -178,7 +205,8 @@ export async function startAttempt(
       });
 
       if (existing?.attempt?.status === "in_progress") {
-        return actionSuccess(
+        return withQuestions(
+          existing.attempt.id,
           {
             attemptId: existing.attempt.id,
             resumed: true,
@@ -206,7 +234,8 @@ export async function startAttempt(
     throw error;
   }
 
-  return actionSuccess(
+  return withQuestions(
+    attemptId,
     {
       attemptId,
       resumed: false,
