@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   AdminEmptyState,
+  AdminListResults,
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
@@ -145,6 +146,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters()}
           showClear={hasActiveFilters}
+          isPending={list.isPending}
           placeholder="Search by name or slug"
           actions={
             <Button onClick={openCreate}>
@@ -154,6 +156,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
           }
         />
 
+        <AdminListResults isPending={list.isPending}>
         {data.items.length === 0 ? (
           <AdminEmptyState
             title="No faculties found"
@@ -214,6 +217,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
             ) : null}
           </div>
         )}
+        </AdminListResults>
       </div>
 
       <ConfirmDeleteDialog

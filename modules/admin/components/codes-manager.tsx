@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   AdminEmptyState,
+  AdminListResults,
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
@@ -207,17 +208,31 @@ export function CodesManager({
     setTogglingIds((current) => ({ ...current, [code.id]: true }));
 
     void (async () => {
-      const result = nextIssued
-        ? await markAccessCodeIssued({ id: code.id })
-        : await releaseAccessCode({ id: code.id });
+      try {
+        const result = nextIssued
+          ? await markAccessCodeIssued({ id: code.id })
+          : await releaseAccessCode({ id: code.id });
 
-      setTogglingIds((current) => {
-        const next = { ...current };
-        delete next[code.id];
-        return next;
-      });
+        if (!result.success) {
+          setIssuedOverrides((current) => {
+            const next = { ...current };
+            if (previousIssued === code.isIssued) {
+              delete next[code.id];
+            } else {
+              next[code.id] = previousIssued;
+            }
+            return next;
+          });
+          toast.error(result.message);
+          return;
+        }
 
-      if (!result.success) {
+        toast.success(
+          result.message ??
+            (nextIssued ? "Marked as issued." : "Released back to available."),
+        );
+        router.refresh();
+      } catch {
         setIssuedOverrides((current) => {
           const next = { ...current };
           if (previousIssued === code.isIssued) {
@@ -227,15 +242,14 @@ export function CodesManager({
           }
           return next;
         });
-        toast.error(result.message);
-        return;
+        toast.error("Could not update this code. Please try again.");
+      } finally {
+        setTogglingIds((current) => {
+          const next = { ...current };
+          delete next[code.id];
+          return next;
+        });
       }
-
-      toast.success(
-        result.message ??
-          (nextIssued ? "Marked as issued." : "Released back to available."),
-      );
-      router.refresh();
     })();
   }
 
@@ -261,6 +275,7 @@ export function CodesManager({
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters(["status", "quiz"])}
           showClear={hasActiveFilters}
+          isPending={list.isPending}
           placeholder="Search by code"
           filters={
             <>
@@ -314,6 +329,7 @@ export function CodesManager({
           }
         />
 
+        <AdminListResults isPending={list.isPending}>
         {data.items.length === 0 ? (
           <AdminEmptyState
             title="No codes found"
@@ -401,6 +417,7 @@ export function CodesManager({
             ) : null}
           </div>
         )}
+        </AdminListResults>
       </div>
 
       <ConfirmDeleteDialog

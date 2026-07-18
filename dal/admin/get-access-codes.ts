@@ -3,12 +3,12 @@ import {
   count,
   desc,
   eq,
+  gte,
   ilike,
   isNotNull,
   isNull,
   lt,
   or,
-  sql,
   type SQL,
 } from "drizzle-orm";
 
@@ -70,7 +70,7 @@ function toDateString(value: Date | null) {
 function notExpiredFilter(now: Date): SQL {
   return or(
     isNull(accessCodes.expiresAt),
-    sql`${accessCodes.expiresAt} >= ${now}`,
+    gte(accessCodes.expiresAt, now),
   )!;
 }
 

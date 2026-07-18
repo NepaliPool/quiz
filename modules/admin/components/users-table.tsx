@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import {
   AdminEmptyState,
+  AdminListResults,
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
@@ -39,6 +40,7 @@ export function UsersTable({ data }: { data: UserListResult }) {
         onQueryChange={list.setQuery}
         onClearFilters={() => list.clearFilters(["role"])}
         showClear={hasActiveFilters}
+        isPending={list.isPending}
         placeholder="Search by name or email"
         filters={
           <Select
@@ -58,6 +60,7 @@ export function UsersTable({ data }: { data: UserListResult }) {
         }
       />
 
+      <AdminListResults isPending={list.isPending}>
       {data.items.length === 0 ? (
         <AdminEmptyState
           title="No users found"
@@ -100,6 +103,7 @@ export function UsersTable({ data }: { data: UserListResult }) {
           ) : null}
         </div>
       )}
+      </AdminListResults>
     </div>
   );
 }

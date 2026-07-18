@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   AdminEmptyState,
+  AdminListResults,
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
@@ -162,6 +163,7 @@ export function SubjectsManager({
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters(["faculty"])}
           showClear={hasActiveFilters}
+          isPending={list.isPending}
           placeholder="Search by subject name"
           filters={
             <Select
@@ -189,6 +191,7 @@ export function SubjectsManager({
           }
         />
 
+        <AdminListResults isPending={list.isPending}>
         {data.items.length === 0 ? (
           <AdminEmptyState
             title="No subjects found"
@@ -251,6 +254,7 @@ export function SubjectsManager({
             ) : null}
           </div>
         )}
+        </AdminListResults>
       </div>
 
       <ConfirmDeleteDialog

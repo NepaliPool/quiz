@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, lt, or, sql, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -45,7 +45,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   const now = new Date();
   const notExpired = or(
     isNull(accessCodes.expiresAt),
-    sql`${accessCodes.expiresAt} >= ${now}`,
+    gte(accessCodes.expiresAt, now),
   )!;
 
   const [

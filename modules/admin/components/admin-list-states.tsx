@@ -14,6 +14,7 @@ export function AdminListToolbar({
   filters,
   actions,
   showClear,
+  isPending = false,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -23,6 +24,7 @@ export function AdminListToolbar({
   actions?: React.ReactNode;
   /** When set, overrides the default “clear when query is non-empty” behavior. */
   showClear?: boolean;
+  isPending?: boolean;
 }) {
   const shouldShowClear =
     showClear ?? Boolean(query.trim() && onClearFilters);
@@ -36,7 +38,8 @@ export function AdminListToolbar({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder={placeholder}
-            className="pl-9 rounded-none"
+            className="rounded-none pl-9"
+            aria-busy={isPending}
           />
         </div>
         {filters}
@@ -54,6 +57,27 @@ export function AdminListToolbar({
         ) : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+export function AdminListResults({
+  isPending = false,
+  children,
+}: {
+  isPending?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={
+        isPending
+          ? "opacity-60 transition-opacity duration-150"
+          : "opacity-100 transition-opacity duration-150"
+      }
+      aria-busy={isPending}
+    >
+      {children}
     </div>
   );
 }

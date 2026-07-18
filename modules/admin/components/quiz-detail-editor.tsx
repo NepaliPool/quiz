@@ -325,27 +325,35 @@ export function QuizDetailEditor({
     setIsPublishPending(true);
 
     void (async () => {
-      const result = await setQuizSetPublished({
-        id: quizSet.id,
-        isPublished: nextPublished,
-      });
+      try {
+        const result = await setQuizSetPublished({
+          id: quizSet.id,
+          isPublished: nextPublished,
+        });
 
-      setIsPublishPending(false);
+        if (!result.success) {
+          setQuizSet((current) => ({
+            ...current,
+            isPublished: previousPublished,
+          }));
+          toast.error(result.message);
+          return;
+        }
 
-      if (!result.success) {
+        toast.success(
+          result.message ??
+            (nextPublished ? "Quiz set published." : "Quiz set unpublished."),
+        );
+        router.refresh();
+      } catch {
         setQuizSet((current) => ({
           ...current,
           isPublished: previousPublished,
         }));
-        toast.error(result.message);
-        return;
+        toast.error("Could not update publish state. Please try again.");
+      } finally {
+        setIsPublishPending(false);
       }
-
-      toast.success(
-        result.message ??
-          (nextPublished ? "Quiz set published." : "Quiz set unpublished."),
-      );
-      router.refresh();
     })();
   }
 
