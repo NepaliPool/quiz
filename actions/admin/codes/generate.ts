@@ -80,6 +80,8 @@ export async function generateAccessCodes(
           id: crypto.randomUUID(),
           quizSetId: quizSet.id,
           code,
+          isIssued: false,
+          issuedAt: null,
           isUsed: false,
           usedAt: null,
           expiresAt,

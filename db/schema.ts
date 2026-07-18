@@ -297,6 +297,9 @@ export const accessCodes = pgTable(
       .notNull()
       .references(() => quizSets.id, { onDelete: "cascade" }),
     code: text("code").notNull(),
+    /** Admin marked this code as handed out to a student (not yet used). */
+    isIssued: boolean("is_issued").default(false).notNull(),
+    issuedAt: timestamp("issued_at"),
     isUsed: boolean("is_used").default(false).notNull(),
     usedAt: timestamp("used_at"),
     expiresAt: timestamp("expires_at"),
@@ -311,6 +314,10 @@ export const accessCodes = pgTable(
     check(
       "access_codes_used_consistency",
       sql`(${table.isUsed} = false AND ${table.usedAt} IS NULL) OR (${table.isUsed} = true AND ${table.usedAt} IS NOT NULL)`,
+    ),
+    check(
+      "access_codes_issued_consistency",
+      sql`(${table.isIssued} = false AND ${table.issuedAt} IS NULL) OR (${table.isIssued} = true AND ${table.issuedAt} IS NOT NULL)`,
     ),
   ],
 );

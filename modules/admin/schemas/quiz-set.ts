@@ -118,7 +118,13 @@ export const deleteQuizSetSchema = z.object({
   id: z.string().min(1, "Quiz set id is required."),
 });
 
+export const setQuizSetPublishedSchema = z.object({
+  id: z.string().min(1, "Quiz set id is required."),
+  isPublished: z.boolean(),
+});
+
 export type CreateQuizSetInput = z.infer<typeof createQuizSetSchema>;
 export type UpdateQuizSetInput = z.infer<typeof updateQuizSetSchema>;
 export type UpdateQuizSetMetaInput = z.infer<typeof updateQuizSetMetaSchema>;
 export type DeleteQuizSetInput = z.infer<typeof deleteQuizSetSchema>;
+export type SetQuizSetPublishedInput = z.infer<typeof setQuizSetPublishedSchema>;

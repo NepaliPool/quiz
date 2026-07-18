@@ -21,8 +21,10 @@ import {
 } from "@/db/schema";
 import { quizSetHasAttempts } from "@/dal/admin/get-quiz-set";
 import {
+  setQuizSetPublishedSchema,
   updateQuizSetMetaSchema,
   updateQuizSetSchema,
+  type SetQuizSetPublishedInput,
   type UpdateQuizSetInput,
   type UpdateQuizSetMetaInput,
 } from "@/modules/admin/schemas/quiz-set";
@@ -232,6 +234,52 @@ export async function updateQuizSetMeta(
 
   await revalidateQuizPaths(parsed.data.id, existing.faculty.slug);
   return actionSuccess({ id: parsed.data.id }, "Quiz set updated.");
+}
+
+export async function setQuizSetPublished(
+  input: SetQuizSetPublishedInput,
+): Promise<ActionResult<{ id: string; isPublished: boolean }>> {
+  const admin = await getCurrentAdmin();
+
+  if (!admin.success) {
+    return actionFailure(admin.message);
+  }
+
+  const parsed = setQuizSetPublishedSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return actionFailure("Invalid publish state.", zodErrorMap(parsed.error));
+  }
+
+  const existing = await db.query.quizSets.findFirst({
+    where: eq(quizSets.id, parsed.data.id),
+    with: {
+      faculty: {
+        columns: { slug: true },
+      },
+    },
+  });
+
+  if (!existing) {
+    return actionFailure("Quiz set not found.");
+  }
+
+  try {
+    await db
+      .update(quizSets)
+      .set({ isPublished: parsed.data.isPublished })
+      .where(eq(quizSets.id, parsed.data.id));
+  } catch (error) {
+    console.error("setQuizSetPublished failed:", error);
+    return actionFailure("Could not update publish state. Please try again.");
+  }
+
+  await revalidateQuizPaths(parsed.data.id, existing.faculty.slug);
+
+  return actionSuccess(
+    { id: parsed.data.id, isPublished: parsed.data.isPublished },
+    parsed.data.isPublished ? "Quiz set published." : "Quiz set unpublished.",
+  );
 }
 
 export async function updateQuizSet(

@@ -79,7 +79,7 @@ export default async function AdminOverviewPage() {
       value: stats.accessCodes,
       href: "/admin/codes",
       icon: KeyRound,
-      hint: `${accessCodeHealth.available} available · ${accessCodeHealth.used} used`,
+      hint: `${accessCodeHealth.available} available · ${accessCodeHealth.issued} issued · ${accessCodeHealth.used} used`,
     },
   ];
 
@@ -227,8 +227,11 @@ export default async function AdminOverviewPage() {
               Access code health
             </p>
             <p className="text-sm text-muted-foreground">
-              {accessCodeHealth.available} codes still available for
-              participants. {accessCodeHealth.used} already used
+              {accessCodeHealth.available} codes still available to hand out.
+              {accessCodeHealth.issued > 0
+                ? ` ${accessCodeHealth.issued} already issued.`
+                : ""}{" "}
+              {accessCodeHealth.used} already used
               {accessCodeHealth.expired > 0
                 ? ` · ${accessCodeHealth.expired} expired`
                 : ""}
@@ -241,6 +244,12 @@ export default async function AdminOverviewPage() {
                 {accessCodeHealth.available}
               </p>
               <p className="text-xs text-muted-foreground">Available</p>
+            </div>
+            <div>
+              <p className="font-display text-2xl tracking-tight">
+                {accessCodeHealth.issued}
+              </p>
+              <p className="text-xs text-muted-foreground">Issued</p>
             </div>
             <div>
               <p className="font-display text-2xl tracking-tight">
