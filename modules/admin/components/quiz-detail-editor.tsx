@@ -196,17 +196,15 @@ export function QuizDetailEditor({
   function removeSection(sectionId: string) {
     if (locked) return;
 
-    setQuizSet((current) => {
-      if (current.sections.length <= 1) {
-        toast.error("A quiz set needs at least one subject section.");
-        return current;
-      }
+    if (quizSet.sections.length <= 1) {
+      toast.error("A quiz set needs at least one subject section.");
+      return;
+    }
 
-      return {
-        ...current,
-        sections: current.sections.filter((section) => section.id !== sectionId),
-      };
-    });
+    setQuizSet((current) => ({
+      ...current,
+      sections: current.sections.filter((section) => section.id !== sectionId),
+    }));
   }
 
   function changeSectionSubject(sectionId: string, subjectId: string) {
@@ -541,8 +539,7 @@ export function QuizDetailEditor({
             size="sm"
             onClick={addSection}
             disabled={
-              facultySubjects.length === 0 ||
-              usedSubjectIds.size >= facultySubjects.length
+              !facultySubjects.some((subject) => !usedSubjectIds.has(subject.id))
             }
           >
             <Plus className="size-4" />
