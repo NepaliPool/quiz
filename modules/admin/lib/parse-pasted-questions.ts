@@ -24,17 +24,25 @@ const OPTION_LINE = /^([A-D])\s*[).:-]\s*(.+)$/i;
 const CORRECT_LINE = /^(?:correct|answer)\s*[:.=-]?\s*([A-D])\s*$/i;
 const CORRECT_MARKER = /(?:\*|✓|\(correct\)|\(answer\))\s*$/i;
 
-export const PASTE_QUESTIONS_FORMAT_HELP = `Q: What is the capital of France?
+export const PASTE_QUESTIONS_FORMAT_HELP = `1. Complete the analogy.
+
+Book : Library :: Patient : ?
+a. School
+b. Hospital*
+c. Office
+d. Market
+
+2. Choose the odd one out.
+a. Rose
+b. Lily
+c. Lotus
+d. Mango*
+
+Q: What is the capital of France?
 A) London
 B) Berlin
 C) Paris *
-D) Madrid
-
-Q: 2 + 2 equals?
-A) 3
-B) 4 *
-C) 5
-D) 22`;
+D) Madrid`;
 
 function newId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -51,6 +59,7 @@ function stripCorrectMarker(raw: string) {
 /**
  * Clean common math-copy artifacts from ChatGPT / rendered LaTeX pastes.
  * e.g. `764\frac{7}{64}647` → `7/64`, bare `\frac{15}{16}` → `15/16`
+ * Preserves newlines so multi-line stems stay intact.
  */
 export function normalizeMathPaste(text: string): string {
   let result = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
@@ -64,20 +73,35 @@ export function normalizeMathPaste(text: string): string {
   // Remaining plain LaTeX fractions
   result = result.replace(/\\frac\{(-?\d+)\}\{(-?\d+)\}/g, "$1/$2");
 
-  // Collapse leftover double spaces from replacements
-  return result.replace(/\s{2,}/g, " ").trim();
+  return result
+    .split("\n")
+    .map((line) => line.replace(/\s{2,}/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /**
  * Parse bulk-pasted MCQ text into question drafts.
- * Expected shape per question:
+ *
+ * Supported shapes:
+ *   1. Instruction line
+ *
+ *   Stem / analogy line
+ *   a. option
+ *   b. option*
+ *   c. option
+ *   d. option
+ *
  *   Q: prompt
  *   A) option
  *   B) option *
  *   C) option
  *   D) option
+ *
  * Exactly 4 options (A–D). Mark the correct option with `*` (or ✓ / (correct)).
  * Optionally end a block with `Correct: C`.
+ * Extra prompt lines (before options) are kept as separate lines in the prompt.
  */
 export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
   const lines = raw
@@ -208,7 +232,7 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
 
     // Continuation of the prompt (multi-line question text).
     if (current.options.length === 0) {
-      current.prompt = `${current.prompt} ${line}`.trim();
+      current.prompt = `${current.prompt}\n${line}`.trim();
       continue;
     }
 

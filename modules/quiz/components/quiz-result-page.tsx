@@ -271,7 +271,7 @@ function QuestionReview({ question }: { question: AnswerSheetQuestion }) {
         </span>
       </div>
 
-      <h4 className="mt-2 text-base font-medium leading-7 md:text-lg">
+      <h4 className="mt-2 whitespace-pre-wrap text-base font-medium leading-7 md:text-lg">
         {question.prompt}
       </h4>
 

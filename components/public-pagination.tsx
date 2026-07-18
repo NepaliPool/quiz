@@ -33,6 +33,7 @@ export function PublicPagination({
           <Link
             href={hrefForPage(page - 1)}
             aria-disabled={page <= 1}
+            tabIndex={page <= 1 ? -1 : undefined}
             className={page <= 1 ? "pointer-events-none opacity-50" : undefined}
             scroll={false}
           >
@@ -53,6 +54,7 @@ export function PublicPagination({
           <Link
             href={hrefForPage(page + 1)}
             aria-disabled={page >= pageCount}
+            tabIndex={page >= pageCount ? -1 : undefined}
             className={
               page >= pageCount ? "pointer-events-none opacity-50" : undefined
             }
