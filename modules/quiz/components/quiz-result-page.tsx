@@ -56,7 +56,6 @@ export function QuizResultPage({
     const parsed = unlockAnswerSheetSchema.safeParse({
       facultySlug: summary.facultySlug,
       quizSetSlug: summary.quizSetSlug,
-      attemptId: summary.attemptId,
       code,
     });
 

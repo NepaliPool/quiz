@@ -25,6 +25,7 @@ import { getZodFieldErrors } from "@/lib/action-result";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slugify";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
+import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
   createQuizSetSchema,
   type CreateQuizSetInput,
@@ -90,6 +91,15 @@ export function QuizCreateForm({
   const [isPublished, setIsPublished] = useState(false);
   const [facultyId, setFacultyId] = useState(faculties[0]?.id ?? "");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [pendingSectionDelete, setPendingSectionDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [pendingQuestionDelete, setPendingQuestionDelete] = useState<{
+    sectionId: string;
+    questionId: string;
+    label: string;
+  } | null>(null);
   const [sections, setSections] = useState<SectionDraft[]>([
     createEmptySection(
       subjects.find((subject) => subject.facultyId === faculties[0]?.id)?.id ??
@@ -243,6 +253,58 @@ export function QuizCreateForm({
 
   return (
     <div className="space-y-8 pb-10">
+      <ConfirmDeleteDialog
+        open={Boolean(pendingSectionDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingSectionDelete(null);
+        }}
+        title="Delete section?"
+        description={
+          pendingSectionDelete
+            ? `Remove the “${pendingSectionDelete.name}” section and its questions?`
+            : "Remove this section?"
+        }
+        confirmLabel="Delete section"
+        onConfirm={() => {
+          if (!pendingSectionDelete) return;
+          setSections((current) =>
+            current.filter((item) => item.id !== pendingSectionDelete.id),
+          );
+          setPendingSectionDelete(null);
+        }}
+      />
+
+      <ConfirmDeleteDialog
+        open={Boolean(pendingQuestionDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingQuestionDelete(null);
+        }}
+        title="Delete question?"
+        description={
+          pendingQuestionDelete
+            ? `Remove ${pendingQuestionDelete.label}?`
+            : "Remove this question?"
+        }
+        confirmLabel="Delete question"
+        onConfirm={() => {
+          if (!pendingQuestionDelete) return;
+          const { sectionId, questionId } = pendingQuestionDelete;
+          setSections((current) =>
+            current.map((section) =>
+              section.id !== sectionId
+                ? section
+                : {
+                    ...section,
+                    questions: section.questions.filter(
+                      (question) => question.id !== questionId,
+                    ),
+                  },
+            ),
+          );
+          setPendingQuestionDelete(null);
+        }}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/admin/quizzes">
@@ -469,9 +531,10 @@ export function QuizCreateForm({
                       size="icon"
                       className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       onClick={() =>
-                        setSections((current) =>
-                          current.filter((item) => item.id !== section.id),
-                        )
+                        setPendingSectionDelete({
+                          id: section.id,
+                          name: subjectName,
+                        })
                       }
                       aria-label="Delete section"
                     >
@@ -539,10 +602,10 @@ export function QuizCreateForm({
                           variant="ghost"
                           className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
-                            updateSection(section.id, {
-                              questions: section.questions.filter(
-                                (item) => item.id !== question.id,
-                              ),
+                            setPendingQuestionDelete({
+                              sectionId: section.id,
+                              questionId: question.id,
+                              label: `question ${questionIndex + 1}`,
                             })
                           }
                           aria-label={`Delete question ${questionIndex + 1}`}

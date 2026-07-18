@@ -32,21 +32,8 @@ type Step = "code" | "taking";
 
 const OPTION_LETTERS = ["A", "B", "C", "D"] as const;
 
-function resultHref(
-  quizSet: PublicQuizSetDetail,
-  opts: { attemptId?: string; code?: string },
-) {
-  const base = `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/result`;
-
-  if (opts.code) {
-    return `${base}?code=${encodeURIComponent(opts.code)}`;
-  }
-
-  if (opts.attemptId) {
-    return `${base}?attempt=${encodeURIComponent(opts.attemptId)}`;
-  }
-
-  return base;
+function resultHref(quizSet: PublicQuizSetDetail, code: string) {
+  return `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/result?code=${encodeURIComponent(code)}`;
 }
 
 export function QuizDetailPage({
@@ -104,7 +91,7 @@ export function QuizDetailPage({
 
       if (response.data.completed) {
         toast.success(response.message ?? "Viewing your results.");
-        router.push(resultHref(quizSet, { code: parsed.data.code }));
+        router.push(resultHref(quizSet, parsed.data.code));
         return;
       }
 
@@ -164,11 +151,8 @@ export function QuizDetailPage({
       }
 
       toast.success("Quiz submitted.");
-      router.push(
-        resultHref(quizSet, {
-          attemptId: response.data.attemptId,
-        }),
-      );    } finally {
+      router.push(resultHref(quizSet, accessCode.trim().toUpperCase()));
+    } finally {
       setIsSubmitting(false);
     }
   }
