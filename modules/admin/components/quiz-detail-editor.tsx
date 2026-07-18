@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { ArrowLeft, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ import type {
 import { cn } from "@/lib/utils";
 import { getZodFieldErrors } from "@/lib/action-result";
 import { slugify } from "@/lib/slugify";
+import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import {
   updateQuizSetMetaSchema,
@@ -109,6 +110,25 @@ function isClientDraftId(id: string, prefix: "q-" | "sec-") {
   return id.startsWith(prefix);
 }
 
+/** Snapshot of quiz structure only (ignores title/publish/etc.). */
+function structureSignature(sections: SectionDraft[]) {
+  return JSON.stringify(
+    sections.map((section) => ({
+      id: isClientDraftId(section.id, "sec-") ? null : section.id,
+      subjectId: section.subjectId,
+      questions: section.questions.map((question) => ({
+        id: isClientDraftId(question.id, "q-") ? null : question.id,
+        prompt: question.prompt,
+        marks: question.marks,
+        options: question.options.map((option) => ({
+          label: option.label,
+          isCorrect: option.isCorrect,
+        })),
+      })),
+    })),
+  );
+}
+
 function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
   return {
     id: quizSet.id,
@@ -152,7 +172,20 @@ export function QuizDetailEditor({
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<string, string>>
   >({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingSectionDelete, setPendingSectionDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [pendingQuestionDelete, setPendingQuestionDelete] = useState<{
+    sectionId: string;
+    questionId: string;
+    label: string;
+  } | null>(null);
   const locked = quizSet.hasAttempts;
+  const structureBaselineRef = useRef(
+    structureSignature(toEditorState(initialQuizSet).sections),
+  );
 
   const usedSubjectIds = new Set(
     quizSet.sections.map((section) => section.subjectId),
@@ -204,6 +237,15 @@ export function QuizDetailEditor({
     setQuizSet((current) => ({
       ...current,
       sections: current.sections.filter((section) => section.id !== sectionId),
+    }));
+  }
+
+  function removeQuestion(sectionId: string, questionId: string) {
+    updateSection(sectionId, (section) => ({
+      ...section,
+      questions: section.questions.filter(
+        (question) => question.id !== questionId,
+      ),
     }));
   }
 
@@ -266,18 +308,12 @@ export function QuizDetailEditor({
     }));
   }
 
-  function removeQuestion(sectionId: string, questionId: string) {
-    updateSection(sectionId, (section) => ({
-      ...section,
-      questions: section.questions.filter(
-        (question) => question.id !== questionId,
-      ),
-    }));
-  }
-
   function handleSave() {
     startTransition(async () => {
-      if (locked) {
+      const structureChanged =
+        structureSignature(quizSet.sections) !== structureBaselineRef.current;
+
+      if (locked || !structureChanged) {
         const parsed = updateQuizSetMetaSchema.safeParse({
           id: quizSet.id,
           title: quizSet.title,
@@ -350,18 +386,47 @@ export function QuizDetailEditor({
         return;
       }
 
+      const nextState: EditorState = {
+        ...quizSet,
+        sections: result.data.sections.map((section) => ({
+          id: section.id,
+          subjectId: section.subjectId,
+          subjectName: section.subjectName,
+          questions: section.questions.map((question) => ({
+            id: question.id,
+            prompt: question.prompt,
+            marks: question.marks,
+            options: question.options.map((option) => ({
+              id: option.id,
+              label: option.label,
+              isCorrect: option.isCorrect,
+            })),
+          })),
+        })),
+      };
+
+      setQuizSet(nextState);
+      structureBaselineRef.current = structureSignature(nextState.sections);
       toast.success(result.message ?? "Saved.");
       router.refresh();
     });
   }
 
-  function handleDelete() {
+  function openDeleteDialog() {
     if (locked) {
       toast.error(
         "Cannot delete a quiz set that already has participant attempts.",
       );
       return;
     }
+
+    setDeleteDialogOpen(true);
+  }
+
+  function confirmDeleteQuizSet() {
+    if (locked) return;
+
+    setDeleteDialogOpen(false);
 
     startTransition(async () => {
       const result = await deleteQuizSet({ id: quizSet.id });
@@ -402,7 +467,7 @@ export function QuizDetailEditor({
               variant="outline"
               size="sm"
               disabled={isPending || locked}
-              onClick={handleDelete}
+              onClick={openDeleteDialog}
             >
               Delete
             </Button>
@@ -416,6 +481,58 @@ export function QuizDetailEditor({
             </Button>
           </div>
         </div>
+
+        <ConfirmDeleteDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          title="Delete quiz set?"
+          description={`This will permanently delete “${quizSet.title}” and all of its sections, questions, and access codes. This cannot be undone.`}
+          confirmLabel="Delete quiz set"
+          requireTypedConfirm
+          isPending={isPending}
+          onConfirm={confirmDeleteQuizSet}
+        />
+
+        <ConfirmDeleteDialog
+          open={Boolean(pendingSectionDelete)}
+          onOpenChange={(open) => {
+            if (!open) setPendingSectionDelete(null);
+          }}
+          title="Delete section?"
+          description={
+            pendingSectionDelete
+              ? `Remove the “${pendingSectionDelete.name}” section and its questions from this quiz set? Save to apply.`
+              : "Remove this section?"
+          }
+          confirmLabel="Delete section"
+          onConfirm={() => {
+            if (!pendingSectionDelete) return;
+            removeSection(pendingSectionDelete.id);
+            setPendingSectionDelete(null);
+          }}
+        />
+
+        <ConfirmDeleteDialog
+          open={Boolean(pendingQuestionDelete)}
+          onOpenChange={(open) => {
+            if (!open) setPendingQuestionDelete(null);
+          }}
+          title="Delete question?"
+          description={
+            pendingQuestionDelete
+              ? `Remove ${pendingQuestionDelete.label}? Save to apply.`
+              : "Remove this question?"
+          }
+          confirmLabel="Delete question"
+          onConfirm={() => {
+            if (!pendingQuestionDelete) return;
+            removeQuestion(
+              pendingQuestionDelete.sectionId,
+              pendingQuestionDelete.questionId,
+            );
+            setPendingQuestionDelete(null);
+          }}
+        />
 
         {locked ? (
           <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
@@ -631,7 +748,12 @@ export function QuizDetailEditor({
                       variant="ghost"
                       size="icon"
                       className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => removeSection(section.id)}
+                      onClick={() =>
+                        setPendingSectionDelete({
+                          id: section.id,
+                          name: section.subjectName,
+                        })
+                      }
                       aria-label={`Delete ${section.subjectName} section`}
                     >
                       <Trash2 className="size-4" />
@@ -697,7 +819,11 @@ export function QuizDetailEditor({
                         variant="ghost"
                         className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         onClick={() =>
-                          removeQuestion(section.id, question.id)
+                          setPendingQuestionDelete({
+                            sectionId: section.id,
+                            questionId: question.id,
+                            label: `question ${questionIndex + 1}`,
+                          })
                         }
                         aria-label={`Delete question ${questionIndex + 1}`}
                       >

@@ -1,56 +1,37 @@
 import { notFound } from "next/navigation";
 
-import {
-  getAttemptAnswerSheetByCode,
-  getAttemptResultSummary,
-} from "@/dal/public/get-attempt-result";
+import { getAttemptAnswerSheetByCode } from "@/dal/public/get-attempt-result";
 import { QuizResultPage } from "@/modules/quiz/components/quiz-result-page";
 
 type QuizResultRouteProps = {
   params: Promise<{ slug: string; quizSetSlug: string }>;
-  searchParams: Promise<{ attempt?: string; code?: string }>;
+  searchParams: Promise<{ code?: string }>;
 };
 
 export default async function QuizResultRoute({
   params,
   searchParams,
 }: QuizResultRouteProps) {
-  const [{ slug, quizSetSlug }, { attempt, code }] = await Promise.all([
+  const [{ slug, quizSetSlug }, { code }] = await Promise.all([
     params,
     searchParams,
   ]);
 
-  const attemptId = typeof attempt === "string" ? attempt : undefined;
   const accessCode = typeof code === "string" ? code : undefined;
 
-  if (accessCode) {
-    const sheet = await getAttemptAnswerSheetByCode({
-      facultySlug: slug,
-      quizSetSlug,
-      code: accessCode,
-      attemptId,
-    });
-
-    if (!sheet) {
-      notFound();
-    }
-
-    return <QuizResultPage summary={sheet} initialSheet={sheet} />;
-  }
-
-  if (!attemptId) {
+  if (!accessCode) {
     notFound();
   }
 
-  const summary = await getAttemptResultSummary({
+  const sheet = await getAttemptAnswerSheetByCode({
     facultySlug: slug,
     quizSetSlug,
-    attemptId,
+    code: accessCode,
   });
 
-  if (!summary) {
+  if (!sheet) {
     notFound();
   }
 
-  return <QuizResultPage summary={summary} />;
+  return <QuizResultPage summary={sheet} initialSheet={sheet} />;
 }
