@@ -64,7 +64,7 @@ export function UsersTable({ data }: { data: UserListResult }) {
           description="Try a different search or role filter."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

@@ -199,7 +199,7 @@ export function SubjectsManager({
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="overflow-hidden border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -56,7 +56,7 @@ export function LandingQuickAccess() {
             setCode(event.target.value.toUpperCase());
           }}
           placeholder="Example: FST-2026-88"
-          className="h-11 tracking-wide"
+          className="h-11 rounded-none tracking-wide shadow-none"
           aria-invalid={Boolean(error)}
           autoComplete="off"
         />
@@ -64,10 +64,10 @@ export function LandingQuickAccess() {
       </Field>
       <Button
         type="submit"
-        className="h-11 w-full sm:w-auto sm:self-start"
+        className="h-11 w-full rounded-none sm:w-auto sm:self-start"
         disabled={isResolving}
       >
-        {isResolving ? "Finding quiz..." : "Continue"}
+        {isResolving ? "Starting quiz..." : "Continue"}
         <ArrowRight className="size-4" />
       </Button>
     </form>

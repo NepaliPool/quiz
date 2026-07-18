@@ -141,7 +141,7 @@ export function SectionQuestionsPastePanel({
       </Dialog>
 
       {open ? (
-        <div className="space-y-3 rounded-xl border bg-background p-4">
+        <div className="space-y-3 border bg-background p-4">
           <div className="space-y-1.5">
             <Label htmlFor={pasteId}>Paste text</Label>
             <Textarea

@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth/auth";
+import { absoluteUrl, createPageMetadata, siteConfig } from "@/lib/seo";
 import { LandingPage } from "@/modules/landing/components/landing-page";
+
+export const metadata: Metadata = createPageMetadata({
+  description: siteConfig.description,
+  path: "/",
+});
 
 export default async function Home({
   searchParams,
@@ -27,5 +34,44 @@ export default async function Home({
       }
     : null;
 
-  return <LandingPage user={user} page={page} />;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: siteConfig.name,
+        url: absoluteUrl("/"),
+        logo: absoluteUrl("/brand/quizdesk-logo.svg"),
+        description: siteConfig.description,
+      },
+      {
+        "@type": "WebSite",
+        name: siteConfig.name,
+        url: absoluteUrl("/"),
+        description: siteConfig.description,
+        publisher: {
+          "@type": "Organization",
+          name: siteConfig.name,
+        },
+      },
+      {
+        "@type": "WebApplication",
+        name: siteConfig.name,
+        url: absoluteUrl("/"),
+        applicationCategory: "EducationalApplication",
+        operatingSystem: "Any",
+        description: siteConfig.description,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <LandingPage user={user} page={page} />
+    </>
+  );
 }

@@ -65,18 +65,26 @@ export function QuizzesList({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total sets</p>
-          <p className="mt-2 text-2xl font-semibold">{data.total}</p>
+      <div className="grid gap-px border bg-border sm:grid-cols-3">
+        <div className="bg-card p-4">
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+            Total sets
+          </p>
+          <p className="mt-2 font-display text-2xl tracking-tight">{data.total}</p>
         </div>
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Published</p>
-          <p className="mt-2 text-2xl font-semibold">{data.published}</p>
+        <div className="bg-card p-4">
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+            Published
+          </p>
+          <p className="mt-2 font-display text-2xl tracking-tight">
+            {data.published}
+          </p>
         </div>
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Drafts</p>
-          <p className="mt-2 text-2xl font-semibold">{data.draft}</p>
+        <div className="bg-card p-4">
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+            Drafts
+          </p>
+          <p className="mt-2 font-display text-2xl tracking-tight">{data.draft}</p>
         </div>
       </div>
 
@@ -135,7 +143,7 @@ export function QuizzesList({
           description="Try a different search or filter, or create a new quiz set."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden border bg-card">
           <ul className="divide-y">
             {data.items.map((set) => (
               <li key={set.id}>

@@ -89,7 +89,7 @@ export default async function AdminOverviewPage() {
         title={`Welcome back, ${firstName}`}
         description="Here's what's running across faculties, quiz sets, and access codes."
         actions={
-          <Button asChild>
+          <Button asChild className="rounded-none">
             <Link href="/admin/quizzes/new">
               <Plus className="size-4" />
               New quiz set
@@ -98,22 +98,31 @@ export default async function AdminOverviewPage() {
         }
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {statCards.map((stat) => (
+      <section className="grid border sm:grid-cols-2 xl:grid-cols-5">
+        {statCards.map((stat, index) => (
           <Link
             key={stat.title}
             href={stat.href}
-            className="group rounded-xl border bg-card p-4 transition-colors hover:border-foreground/20 hover:bg-muted/30"
+            className={[
+              "group bg-card p-4 transition-colors hover:bg-accent/50",
+              index < 4 ? "border-b xl:border-b-0" : "",
+              index % 2 === 0 ? "sm:border-r" : "",
+              index < 4 ? "xl:border-r" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{stat.title}</p>
-                <p className="text-3xl font-semibold tracking-tight">
+              <div className="min-w-0 space-y-3">
+                <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+                  {stat.title}
+                </p>
+                <p className="font-display text-3xl tracking-tight">
                   {stat.value}
                 </p>
                 <p className="text-xs text-muted-foreground">{stat.hint}</p>
               </div>
-              <span className="flex size-9 items-center justify-center rounded-lg border bg-background text-muted-foreground transition-colors group-hover:text-foreground">
+              <span className="flex size-9 shrink-0 items-center justify-center border bg-background text-muted-foreground transition-colors group-hover:text-foreground">
                 <stat.icon className="size-4" />
               </span>
             </div>
@@ -121,23 +130,23 @@ export default async function AdminOverviewPage() {
         ))}
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:gap-0 lg:divide-x lg:border">
+        <div className="space-y-4 lg:p-6">
+          <div className="flex items-end justify-between gap-3 border-b pb-4">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">
+              <h2 className="font-display text-2xl tracking-tight">
                 Recent quiz sets
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Jump back into the latest assessments.
               </p>
             </div>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="rounded-none">
               <Link href="/admin/quizzes">View all</Link>
             </Button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="overflow-hidden border bg-card lg:border-0">
             {recentQuizSets.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 No quiz sets yet. Create your first set to get started.
@@ -148,14 +157,17 @@ export default async function AdminOverviewPage() {
                   <li key={set.id}>
                     <Link
                       href={`/admin/quizzes/${set.id}`}
-                      className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-muted/40"
+                      className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-accent/40"
                     >
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-medium">{set.title}</p>
-                          <Badge variant="outline">{set.facultyName}</Badge>
+                          <Badge variant="outline" className="rounded-none">
+                            {set.facultyName}
+                          </Badge>
                           <Badge
                             variant={set.isPublished ? "secondary" : "outline"}
+                            className="rounded-none"
                           >
                             {set.isPublished ? "Published" : "Draft"}
                           </Badge>
@@ -166,7 +178,7 @@ export default async function AdminOverviewPage() {
                           subjects
                         </p>
                       </div>
-                      <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                      <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </Link>
                   </li>
                 ))}
@@ -175,24 +187,24 @@ export default async function AdminOverviewPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">
+        <div className="space-y-4 lg:p-6">
+          <div className="border-b pb-4">
+            <h2 className="font-display text-2xl tracking-tight">
               Quick actions
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               Common admin tasks in one place.
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="divide-y border">
             {quickActions.map((action) => (
               <Link
                 key={action.href}
                 href={action.href}
-                className="flex items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-foreground/20 hover:bg-muted/30"
+                className="flex items-start gap-3 bg-card p-4 transition-colors hover:bg-accent/40"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
+                <span className="flex size-9 shrink-0 items-center justify-center border bg-background">
                   <action.icon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1 space-y-1">
@@ -208,10 +220,12 @@ export default async function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border bg-muted/20 px-5 py-5 sm:px-6">
+      <section className="border bg-card px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-base font-medium">Access code health</p>
+            <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+              Access code health
+            </p>
             <p className="text-sm text-muted-foreground">
               {accessCodeHealth.available} codes still available for
               participants. {accessCodeHealth.used} already used
@@ -223,18 +237,18 @@ export default async function AdminOverviewPage() {
           </div>
           <div className="flex flex-wrap items-center gap-6">
             <div>
-              <p className="text-2xl font-semibold tracking-tight">
+              <p className="font-display text-2xl tracking-tight">
                 {accessCodeHealth.available}
               </p>
               <p className="text-xs text-muted-foreground">Available</p>
             </div>
             <div>
-              <p className="text-2xl font-semibold tracking-tight">
+              <p className="font-display text-2xl tracking-tight">
                 {accessCodeHealth.used}
               </p>
               <p className="text-xs text-muted-foreground">Used</p>
             </div>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="rounded-none">
               <Link href="/admin/codes">Manage codes</Link>
             </Button>
           </div>

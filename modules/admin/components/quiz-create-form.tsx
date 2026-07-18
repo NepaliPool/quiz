@@ -337,7 +337,7 @@ export function QuizCreateForm({
         </p>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border bg-card">
+      <section className="overflow-hidden border bg-card">
         <div className="border-b bg-muted/40 px-5 py-4">
           <h2 className="font-semibold tracking-tight">Quiz details</h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -460,11 +460,11 @@ export function QuizCreateForm({
           return (
             <section
               key={section.id}
-              className="overflow-hidden rounded-2xl border bg-card"
+              className="overflow-hidden border bg-card"
             >
               <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-4">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-background text-sm font-semibold">
+                  <span className="flex size-10 shrink-0 items-center justify-center border bg-background text-sm font-semibold">
                     {subjectName.slice(0, 2).toUpperCase()}
                   </span>
                   <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
@@ -578,7 +578,7 @@ export function QuizCreateForm({
                 {section.questions.map((question, questionIndex) => (
                   <div
                     key={question.id}
-                    className="group flex flex-col gap-4 rounded-xl border bg-background p-4"
+                    className="group flex flex-col gap-4 border bg-background p-4"
                   >
                     <div className="flex items-start gap-3">
                       <span className="mt-2.5 shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
