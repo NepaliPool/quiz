@@ -8,9 +8,9 @@ import { toast } from "sonner";
 
 import { createQuizSet } from "@/actions/admin/quizzes/create";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -417,13 +417,18 @@ export function QuizCreateForm({
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 md:col-span-2">
-            <Checkbox
+          <div className="flex items-center justify-between gap-3 border px-3 py-2.5 md:col-span-2">
+            <div className="space-y-0.5">
+              <Label htmlFor="quiz-published">Publish immediately</Label>
+              <p className="text-xs text-muted-foreground">
+                Make this quiz visible on the faculty page after create.
+              </p>
+            </div>
+            <Switch
               id="quiz-published"
               checked={isPublished}
-              onCheckedChange={(checked) => setIsPublished(checked === true)}
+              onCheckedChange={setIsPublished}
             />
-            <Label htmlFor="quiz-published">Publish immediately</Label>
           </div>
         </div>
       </section>

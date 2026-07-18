@@ -16,6 +16,7 @@ export default async function AdminCodesPage({
   const params = await searchParams;
   const status =
     params.status === "available" ||
+    params.status === "issued" ||
     params.status === "used" ||
     params.status === "expired"
       ? params.status
@@ -36,7 +37,7 @@ export default async function AdminCodesPage({
     <div className="space-y-6">
       <AdminPageHeader
         title="Access codes"
-        description="Issue one-time codes for quiz sets and track whether they were used."
+        description="Generate one-time codes, mark them issued when you hand them out, and track use."
       />
       <CodesManager
         data={data}

@@ -20,5 +20,10 @@ export const deleteAccessCodeSchema = z.object({
   id: z.string().min(1, "Access code id is required."),
 });
 
+export const accessCodeIdSchema = z.object({
+  id: z.string().min(1, "Access code id is required."),
+});
+
 export type GenerateAccessCodesInput = z.infer<typeof generateAccessCodesSchema>;
 export type DeleteAccessCodeInput = z.infer<typeof deleteAccessCodeSchema>;
+export type AccessCodeIdInput = z.infer<typeof accessCodeIdSchema>;

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, lt, or, sql, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -32,6 +32,7 @@ export type AdminOverview = {
   };
   accessCodeHealth: {
     available: number;
+    issued: number;
     used: number;
     expired: number;
   };
@@ -42,6 +43,10 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   await requireAdminForDal();
 
   const now = new Date();
+  const notExpired = or(
+    isNull(accessCodes.expiresAt),
+    sql`${accessCodes.expiresAt} >= ${now}`,
+  )!;
 
   const [
     usersRow,
@@ -49,6 +54,8 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     subjectsRow,
     quizSetsRow,
     accessCodesRow,
+    availableCodesRow,
+    issuedCodesRow,
     usedCodesRow,
     expiredCodesRow,
     recentRows,
@@ -58,6 +65,26 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     db.select({ value: count() }).from(subjects),
     db.select({ value: count() }).from(quizSets),
     db.select({ value: count() }).from(accessCodes),
+    db
+      .select({ value: count() })
+      .from(accessCodes)
+      .where(
+        and(
+          eq(accessCodes.isUsed, false),
+          eq(accessCodes.isIssued, false),
+          notExpired,
+        ),
+      ),
+    db
+      .select({ value: count() })
+      .from(accessCodes)
+      .where(
+        and(
+          eq(accessCodes.isUsed, false),
+          eq(accessCodes.isIssued, true),
+          notExpired,
+        ),
+      ),
     db
       .select({ value: count() })
       .from(accessCodes)
@@ -86,9 +113,10 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   ]);
 
   const totalCodes = Number(accessCodesRow[0]?.value ?? 0);
+  const available = Number(availableCodesRow[0]?.value ?? 0);
+  const issued = Number(issuedCodesRow[0]?.value ?? 0);
   const used = Number(usedCodesRow[0]?.value ?? 0);
   const expired = Number(expiredCodesRow[0]?.value ?? 0);
-  const available = Math.max(0, totalCodes - used - expired);
 
   const setIds = recentRows.map((row) => row.id);
 
@@ -140,6 +168,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     },
     accessCodeHealth: {
       available,
+      issued,
       used,
       expired,
     },

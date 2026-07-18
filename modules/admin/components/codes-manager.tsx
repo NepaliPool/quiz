@@ -2,11 +2,15 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { deleteAccessCode } from "@/actions/admin/codes/delete";
 import { generateAccessCodes } from "@/actions/admin/codes/generate";
+import {
+  markAccessCodeIssued,
+  releaseAccessCode,
+} from "@/actions/admin/codes/issue";
 import {
   ACCESS_CODE_STATUS_OPTIONS,
   AccessCodeStatusLabel,
@@ -14,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AdminEmptyState,
   AdminListToolbar,
@@ -43,7 +48,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AccessCodeListResult } from "@/dal/admin/get-access-codes";
+import type {
+  AccessCodeListResult,
+  AccessCodeStatus,
+} from "@/dal/admin/get-access-codes";
 import type { QuizSetOption } from "@/dal/admin/get-quiz-sets";
 import { getZodFieldErrors } from "@/lib/action-result";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
@@ -84,6 +92,30 @@ export function CodesManager({
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof GenerateAccessCodesInput, string>>
   >({});
+  const [issuedOverrides, setIssuedOverrides] = useState<
+    Record<string, boolean>
+  >({});
+  const [togglingIds, setTogglingIds] = useState<Record<string, true>>({});
+
+  useEffect(() => {
+    setIssuedOverrides((current) => {
+      if (Object.keys(current).length === 0) {
+        return current;
+      }
+
+      const next = { ...current };
+      let changed = false;
+
+      for (const code of data.items) {
+        if (code.id in next && next[code.id] === code.isIssued) {
+          delete next[code.id];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [data.items]);
 
   const showPagination = data.total > data.pageSize;
   const hasActiveFilters = Boolean(
@@ -158,6 +190,69 @@ export function CodesManager({
     });
   }
 
+  function handleIssuedToggle(
+    code: AccessCodeListResult["items"][number],
+    nextIssued: boolean,
+  ) {
+    const previousIssued = issuedOverrides[code.id] ?? code.isIssued;
+
+    if (previousIssued === nextIssued || togglingIds[code.id]) {
+      return;
+    }
+
+    setIssuedOverrides((current) => ({
+      ...current,
+      [code.id]: nextIssued,
+    }));
+    setTogglingIds((current) => ({ ...current, [code.id]: true }));
+
+    void (async () => {
+      const result = nextIssued
+        ? await markAccessCodeIssued({ id: code.id })
+        : await releaseAccessCode({ id: code.id });
+
+      setTogglingIds((current) => {
+        const next = { ...current };
+        delete next[code.id];
+        return next;
+      });
+
+      if (!result.success) {
+        setIssuedOverrides((current) => {
+          const next = { ...current };
+          if (previousIssued === code.isIssued) {
+            delete next[code.id];
+          } else {
+            next[code.id] = previousIssued;
+          }
+          return next;
+        });
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(
+        result.message ??
+          (nextIssued ? "Marked as issued." : "Released back to available."),
+      );
+      router.refresh();
+    })();
+  }
+
+  function resolveIssued(code: AccessCodeListResult["items"][number]) {
+    return issuedOverrides[code.id] ?? code.isIssued;
+  }
+
+  function resolveStatus(
+    code: AccessCodeListResult["items"][number],
+  ): AccessCodeStatus {
+    if (code.status === "used" || code.status === "expired") {
+      return code.status;
+    }
+
+    return resolveIssued(code) ? "issued" : "available";
+  }
+
   return (
     <>
       <div className="space-y-4">
@@ -183,7 +278,7 @@ export function CodesManager({
                         option.label
                       ) : (
                         <AccessCodeStatusLabel
-                          status={option.value as "available" | "used" | "expired"}
+                          status={option.value as AccessCodeStatus}
                         />
                       )}
                     </SelectItem>
@@ -236,40 +331,63 @@ export function CodesManager({
                   <TableHead>Code</TableHead>
                   <TableHead>Quiz set</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Issued</TableHead>
                   <TableHead>Expires</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="w-20 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.items.map((code) => (
-                  <TableRow key={code.id}>
-                    <TableCell className="font-mono font-medium">
-                      {code.code}
-                    </TableCell>
-                    <TableCell>{code.quizSetTitle}</TableCell>
-                    <TableCell>
-                      <AccessCodeStatusLabel status={code.status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {code.expiresAt ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {code.createdAt}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={isPending || code.hasAttempt}
-                        className="hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setPendingDelete(code)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {data.items.map((code) => {
+                  const isIssued = resolveIssued(code);
+                  const status = resolveStatus(code);
+                  const canToggleIssued =
+                    status === "available" || status === "issued";
+
+                  return (
+                    <TableRow key={code.id}>
+                      <TableCell className="font-mono font-medium">
+                        {code.code}
+                      </TableCell>
+                      <TableCell>{code.quizSetTitle}</TableCell>
+                      <TableCell>
+                        <AccessCodeStatusLabel status={status} />
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={isIssued}
+                          disabled={!canToggleIssued || Boolean(togglingIds[code.id])}
+                          aria-label={
+                            isIssued
+                              ? `Release ${code.code}`
+                              : `Mark ${code.code} as issued`
+                          }
+                          onCheckedChange={(checked) =>
+                            handleIssuedToggle(code, checked)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {code.expiresAt ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {code.createdAt}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          disabled={isPending || code.hasAttempt}
+                          className="hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={`Delete ${code.code}`}
+                          onClick={() => setPendingDelete(code)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             {showPagination ? (
@@ -308,7 +426,7 @@ export function CodesManager({
             <SheetTitle>Generate access codes</SheetTitle>
             <SheetDescription>
               Choose a published quiz set and how many codes to create. Codes
-              are generated on the server.
+              start as available — toggle Issued when you hand them out.
             </SheetDescription>
           </SheetHeader>
 
