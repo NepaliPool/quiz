@@ -162,6 +162,42 @@ export async function startAttempt(
       (error instanceof Error && error.message === "CODE_ALREADY_USED") ||
       isUniqueViolation(error)
     ) {
+      const existing = await db.query.accessCodes.findFirst({
+        where: and(
+          eq(accessCodes.code, code),
+          eq(accessCodes.quizSetId, quizSetId),
+        ),
+        with: {
+          attempt: {
+            columns: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (existing?.attempt?.status === "in_progress") {
+        return actionSuccess(
+          {
+            attemptId: existing.attempt.id,
+            resumed: true,
+          },
+          "Resuming your in-progress attempt.",
+        );
+      }
+
+      if (existing?.attempt?.status === "completed") {
+        return actionSuccess(
+          {
+            attemptId: existing.attempt.id,
+            resumed: false,
+            completed: true,
+          },
+          "This code was already used. View your results.",
+        );
+      }
+
       return actionFailure("This access code has already been used.", {
         code: "This access code has already been used.",
       });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, GraduationCap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PublicPagination } from "@/components/public-pagination";
@@ -22,8 +22,8 @@ export async function LandingFaculties({ page = 1 }: { page?: number }) {
 
   if (total === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-card px-6 py-16 text-center">
-        <h3 className="text-lg font-semibold">No faculties yet</h3>
+      <div className="border border-dashed bg-card px-6 py-16 text-center">
+        <h3 className="text-lg font-medium">No faculties yet</h3>
         <p className="mt-2 text-sm text-muted-foreground">
           Published quiz sets will show up here once faculties are ready.
         </p>
@@ -32,38 +32,39 @@ export async function LandingFaculties({ page = 1 }: { page?: number }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="space-y-8">
+      <div className="grid gap-px border bg-border md:grid-cols-2 xl:grid-cols-3">
         {faculties.map((faculty) => (
           <article
             key={faculty.id}
-            className="flex min-h-64 flex-col justify-between rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex min-h-56 flex-col justify-between bg-card p-6 transition-colors hover:bg-accent/50"
           >
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="flex items-start justify-between gap-4">
-                <span className="flex size-10 items-center justify-center rounded-xl border bg-background">
-                  <GraduationCap className="size-5" />
-                </span>
-                <span className="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
+                <h3 className="font-display text-2xl tracking-tight transition-colors group-hover:text-primary">
+                  {faculty.name}
+                </h3>
+                <span className="shrink-0 border px-2 py-1 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
                   {faculty.setCount}{" "}
-                  {faculty.setCount === 1 ? "quiz set" : "quiz sets"}
+                  {faculty.setCount === 1 ? "set" : "sets"}
                 </span>
               </div>
 
-              <div>
-                <h3 className="text-xl font-semibold">{faculty.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {faculty.totalQuestions}{" "}
-                  {faculty.totalQuestions === 1 ? "question" : "questions"}{" "}
-                  across published sets.
-                </p>
-              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {faculty.totalQuestions}{" "}
+                {faculty.totalQuestions === 1 ? "question" : "questions"} across
+                published sets.
+              </p>
             </div>
 
-            <Button asChild className="mt-6 w-full" variant="outline">
+            <Button
+              asChild
+              className="mt-8 w-full rounded-none"
+              variant="outline"
+            >
               <Link href={`/faculty/${faculty.slug}`}>
                 View quiz sets
-                <ArrowRight className="size-4" />
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </Button>
           </article>

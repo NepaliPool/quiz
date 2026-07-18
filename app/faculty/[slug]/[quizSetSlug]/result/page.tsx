@@ -1,12 +1,27 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getAttemptAnswerSheetByCode } from "@/dal/public/get-attempt-result";
+import { createPageMetadata } from "@/lib/seo";
 import { QuizResultPage } from "@/modules/quiz/components/quiz-result-page";
 
 type QuizResultRouteProps = {
   params: Promise<{ slug: string; quizSetSlug: string }>;
   searchParams: Promise<{ code?: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: QuizResultRouteProps): Promise<Metadata> {
+  const { slug, quizSetSlug } = await params;
+
+  return createPageMetadata({
+    title: "Quiz results",
+    description: "Private quiz results for your access code on QuizDesk.",
+    path: `/faculty/${slug}/${quizSetSlug}/result`,
+    noIndex: true,
+  });
+}
 
 export default async function QuizResultRoute({
   params,

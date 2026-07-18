@@ -40,16 +40,7 @@ export function LandingAuthNav({ user }: { user: LandingUser | null }) {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   if (!user) {
-    return (
-      <nav className="flex items-center gap-2">
-        <Button asChild variant="ghost">
-          <Link href="/login">Login</Link>
-        </Button>
-        <Button asChild>
-          <Link href="/sign-up">Create account</Link>
-        </Button>
-      </nav>
-    );
+    return null;
   }
 
   const isAdmin = user.role === "admin" || user.role === "superadmin";
@@ -85,16 +76,18 @@ export function LandingAuthNav({ user }: { user: LandingUser | null }) {
           <Button
             type="button"
             variant="ghost"
-            className="relative size-10 rounded-full p-0"
+            className="relative size-10 rounded-none border p-0"
             aria-label="Account menu"
           >
-            <Avatar className="size-9">
+            <Avatar className="size-9 rounded-none">
               {avatar ? <AvatarImage src={avatar} alt={user.name} /> : null}
-              <AvatarFallback>{initials(user.name)}</AvatarFallback>
+              <AvatarFallback className="rounded-none">
+                {initials(user.name)}
+              </AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-56 rounded-lg">
+        <DropdownMenuContent align="end" className="min-w-56 rounded-none">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col gap-1">
               <span className="truncate text-sm font-medium">{user.name}</span>

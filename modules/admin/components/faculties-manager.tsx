@@ -160,7 +160,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
             description="Try a different search term or create a new faculty."
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="overflow-hidden border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>

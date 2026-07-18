@@ -21,6 +21,7 @@ import {
   loginSchema,
   type LoginValues,
 } from "@/modules/auth/schemas";
+import { postAuthPath, roleFromUnknown } from "@/modules/auth/post-auth-path";
 
 import { AuthShell } from "./auth-shell";
 
@@ -59,8 +60,13 @@ export function LoginForm() {
           throw new Error(result.error.message ?? "Unable to sign in.");
         }
 
+        const session = await authClient.getSession();
+        const role =
+          roleFromUnknown(session.data?.user) ??
+          roleFromUnknown(result.data?.user);
+
         toast.success("Signed in successfully.");
-        router.push("/");
+        router.push(postAuthPath(role));
         router.refresh();
       } catch (error) {
         toast.error(
