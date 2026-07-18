@@ -23,6 +23,7 @@ import type {
 import { cn } from "@/lib/utils";
 import { getZodFieldErrors } from "@/lib/action-result";
 import { slugify } from "@/lib/slugify";
+import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import {
   updateQuizSetMetaSchema,
   updateQuizSetSchema,
@@ -479,6 +480,28 @@ export function QuizDetailEditor({
                 </Button>
               ) : null}
             </div>
+
+            {!locked ? (
+              <SectionQuestionsPastePanel
+                sectionId={section.id}
+                questionCount={section.questions.length}
+                onApply={(questions, mode) =>
+                  updateSection(section.id, (current) => ({
+                    ...current,
+                    questions:
+                      mode === "append"
+                        ? [...current.questions, ...questions]
+                        : questions,
+                  }))
+                }
+                onClearAll={() =>
+                  updateSection(section.id, (current) => ({
+                    ...current,
+                    questions: [createEmptyQuestion()],
+                  }))
+                }
+              />
+            ) : null}
 
             <div
               className={cn(

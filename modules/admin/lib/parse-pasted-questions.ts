@@ -49,6 +49,26 @@ function stripCorrectMarker(raw: string) {
 }
 
 /**
+ * Clean common math-copy artifacts from ChatGPT / rendered LaTeX pastes.
+ * e.g. `764\frac{7}{64}647` → `7/64`, bare `\frac{15}{16}` → `15/16`
+ */
+export function normalizeMathPaste(text: string): string {
+  let result = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+  // {num}{den}\frac{num}{den}{den}{num}  (digits duplicated around LaTeX)
+  result = result.replace(
+    /(\d+)(\d+)\\frac\{\1\}\{\2\}\2\1/g,
+    "$1/$2",
+  );
+
+  // Remaining plain LaTeX fractions
+  result = result.replace(/\\frac\{(-?\d+)\}\{(-?\d+)\}/g, "$1/$2");
+
+  // Collapse leftover double spaces from replacements
+  return result.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
  * Parse bulk-pasted MCQ text into question drafts.
  * Expected shape per question:
  *   Q: prompt
@@ -83,7 +103,7 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
     if (!current) return;
 
     const questionIndex = current.sourceIndex;
-    const prompt = current.prompt.trim();
+    const prompt = normalizeMathPaste(current.prompt);
 
     if (!prompt) {
       errors.push({
@@ -114,7 +134,7 @@ export function parsePastedQuestions(raw: string): ParsePastedQuestionsResult {
     }
 
     let options = current.options.map((option) => ({
-      label: option.label,
+      label: normalizeMathPaste(option.label),
       isCorrect: option.isCorrect,
     }));
 
