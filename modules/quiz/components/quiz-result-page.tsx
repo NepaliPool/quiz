@@ -18,6 +18,7 @@ import type {
 } from "@/dal/public/get-attempt-result";
 import { cn } from "@/lib/utils";
 import { PublicPageShell } from "@/modules/public/components/public-page-shell";
+import { ContentLeakGuard } from "@/modules/quiz/components/content-leak-guard";
 import { unlockAnswerSheetSchema } from "@/modules/quiz/schemas/attempt";
 
 const OPTION_LETTERS = ["A", "B", "C", "D"] as const;
@@ -175,7 +176,11 @@ export function QuizResultPage({
           </form>
         </section>
       ) : (
-        <AnswerSheetView sections={sheet.sections} />
+        <ContentLeakGuard
+          watermark={`${summary.quizSetTitle} · ${code.trim().toUpperCase() || summary.attemptId.slice(0, 8)}`}
+        >
+          <AnswerSheetView sections={sheet.sections} />
+        </ContentLeakGuard>
       )}
 
       <div className="mt-10 flex flex-col gap-3 sm:flex-row">

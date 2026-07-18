@@ -239,3 +239,18 @@
     animation: none;
   }
 }
+
+/* Soft print block for protected quiz / answer-sheet content */
+@media print {
+  .content-leak-guard {
+    visibility: hidden !important;
+  }
+
+  .content-leak-guard::after {
+    visibility: visible !important;
+    content: "This assessment content cannot be printed from QuizDesk.";
+    display: block;
+    font-size: 14pt;
+    margin: 2rem 0;
+  }
+}
