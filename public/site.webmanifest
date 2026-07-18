@@ -1,0 +1,17 @@
+{
+  "name": "QuizDesk",
+  "short_name": "QuizDesk",
+  "description": "Faculty-first quiz delivery with subject sections and one-time access codes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fa",
+  "theme_color": "#00DC33",
+  "icons": [
+    {
+      "src": "/brand/quizdesk-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

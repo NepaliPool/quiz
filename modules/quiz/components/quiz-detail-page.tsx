@@ -1,16 +1,18 @@
 "use client";
 
 import {
-  ArrowLeft,
   CheckCircle2,
   Clock3,
-  GraduationCap,
-  KeyRound,
   Trophy,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 import { startAttempt } from "@/actions/quiz/start-attempt";
@@ -23,6 +25,7 @@ import type {
   PublicQuizSetDetail,
 } from "@/dal/public/get-quiz-set";
 import { cn } from "@/lib/utils";
+import { PublicPageShell } from "@/modules/public/components/public-page-shell";
 import {
   startAttemptSchema,
   submitAttemptSchema,
@@ -44,10 +47,11 @@ export function QuizDetailPage({
   initialCode?: string;
 }) {
   const router = useRouter();
+  const autoStartedRef = useRef(false);
   const [step, setStep] = useState<Step>("code");
   const [accessCode, setAccessCode] = useState(initialCode?.toUpperCase() ?? "");
   const [codeError, setCodeError] = useState<string>();
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(Boolean(initialCode));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string>();
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -60,12 +64,10 @@ export function QuizDetailPage({
       ? 0
       : Math.round((answeredCount / totalQuestions) * 100);
 
-  async function handleVerifyCode(event: FormEvent) {
-    event.preventDefault();
-
+  async function verifyAndStart(code: string, { silent = false } = {}) {
     const parsed = startAttemptSchema.safeParse({
       quizSetId: quizSet.id,
-      code: accessCode,
+      code,
     });
 
     if (!parsed.success) {
@@ -74,6 +76,7 @@ export function QuizDetailPage({
           parsed.error.issues[0]?.message ??
           "Enter a valid access code.",
       );
+      setIsVerifying(false);
       return;
     }
 
@@ -85,17 +88,20 @@ export function QuizDetailPage({
 
       if (!response.success) {
         setCodeError(response.errors?.code ?? response.message);
-        toast.error(response.message);
+        if (!silent) {
+          toast.error(response.message);
+        }
         return;
       }
 
       if (response.data.completed) {
         toast.success(response.message ?? "Viewing your results.");
-        router.push(resultHref(quizSet, parsed.data.code));
+        router.replace(resultHref(quizSet, parsed.data.code));
         return;
       }
 
       setAttemptId(response.data.attemptId);
+      setAccessCode(parsed.data.code);
       setStep("taking");
       toast.success(
         response.message ??
@@ -103,12 +109,34 @@ export function QuizDetailPage({
             ? "Resuming your in-progress attempt."
             : "Code accepted. Good luck."),
       );
+
+      router.replace(`/faculty/${quizSet.faculty.slug}/${quizSet.slug}`, {
+        scroll: false,
+      });
     } finally {
       setIsVerifying(false);
     }
   }
 
+  useEffect(() => {
+    if (!initialCode || autoStartedRef.current) {
+      return;
+    }
+
+    autoStartedRef.current = true;
+    void verifyAndStart(initialCode, { silent: true });
+    // Auto-start once when arriving with ?code=
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode]);
+
+  async function handleVerifyCode(event: FormEvent) {
+    event.preventDefault();
+    await verifyAndStart(accessCode);
+  }
+
   function selectOption(questionId: string, optionId: string) {
+    if (isSubmitting) return;
+
     setAnswers((current) => ({
       ...current,
       [questionId]: optionId,
@@ -116,6 +144,8 @@ export function QuizDetailPage({
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return;
+
     if (!attemptId) {
       toast.error("Start the quiz with a valid access code first.");
       setStep("code");
@@ -158,85 +188,77 @@ export function QuizDetailPage({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-5">
-          <Link
-            href={`/faculty/${quizSet.faculty.slug}`}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Back to {quizSet.faculty.name}
-          </Link>
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="flex size-8 items-center justify-center rounded-lg border bg-card">
-              <GraduationCap className="size-4" />
+    <PublicPageShell
+      backHref={`/faculty/${quizSet.faculty.slug}`}
+      backLabel={`Back to ${quizSet.faculty.name}`}
+    >
+      <div className="mb-10 space-y-5 border-b pb-8">
+        <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
+          {quizSet.faculty.name}
+        </p>
+
+        <div className="space-y-3">
+          <h1 className="font-display text-4xl tracking-tight md:text-5xl">
+            {quizSet.title}
+          </h1>
+          {quizSet.description ? (
+            <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+              {quizSet.description}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <MetaChip
+            icon={<Trophy className="size-4" />}
+            label={`${totalMarks} total marks`}
+          />
+          <MetaChip
+            icon={<Clock3 className="size-4" />}
+            label={`${quizSet.durationMinutes} min`}
+          />
+          <MetaChip
+            icon={<CheckCircle2 className="size-4" />}
+            label={`${totalQuestions} questions`}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {quizSet.sections.map((section) => (
+            <span
+              key={section.id}
+              className="border bg-muted/50 px-3 py-1.5 text-xs font-medium"
+            >
+              {section.subject.name} · {section.fullMarks} marks
             </span>
-            QuizDesk
-          </Link>
+          ))}
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10 md:py-14">
-        <div className="mb-10 space-y-5">
-          <span className="inline-flex rounded-full border px-3 py-1 text-sm text-muted-foreground">
-            {quizSet.faculty.name}
-          </span>
-
-          <div className="space-y-3">
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              {quizSet.title}
-            </h1>
-            {quizSet.description ? (
-              <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                {quizSet.description}
-              </p>
-            ) : null}
+      {step === "code" && (
+        <section className="w-full max-w-lg border bg-card p-6 md:p-8">
+          <div className="mb-6 space-y-2">
+            <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
+              Access required
+            </p>
+            <h2 className="font-display text-3xl tracking-tight">
+              {isVerifying && initialCode
+                ? "Starting your quiz…"
+                : "Enter your one-time code"}
+            </h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {isVerifying && initialCode
+                ? "Validating your access code and opening the quiz set."
+                : "One code unlocks the full faculty set — all subject sections on this page."}
+            </p>
           </div>
 
-          <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-            <MetaChip
-              icon={<Trophy className="size-4" />}
-              label={`${totalMarks} total marks`}
-            />
-            <MetaChip
-              icon={<Clock3 className="size-4" />}
-              label={`${quizSet.durationMinutes} min`}
-            />
-            <MetaChip
-              icon={<CheckCircle2 className="size-4" />}
-              label={`${totalQuestions} questions`}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {quizSet.sections.map((section) => (
-              <span
-                key={section.id}
-                className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium"
-              >
-                {section.subject.name} · {section.fullMarks} marks
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {step === "code" && (
-          <section className="w-full max-w-lg rounded-2xl border bg-card p-6 md:p-8">
-            <div className="mb-6 space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <KeyRound className="size-4" />
-                <p className="text-sm">Access required</p>
-              </div>
-              <h2 className="text-xl font-semibold tracking-tight">
-                Enter your one-time code
-              </h2>
-              <p className="text-sm leading-6 text-muted-foreground">
-                One code unlocks the full faculty set — all subject sections on
-                this page.
-              </p>
+          {isVerifying && initialCode ? (
+            <div className="space-y-3">
+              <div className="h-11 w-full animate-pulse bg-muted" />
+              <div className="h-10 w-40 animate-pulse bg-muted" />
             </div>
-
+          ) : (
             <form className="space-y-5" onSubmit={handleVerifyCode}>
               <Field>
                 <FieldLabel htmlFor="access-code">Access code</FieldLabel>
@@ -251,6 +273,7 @@ export function QuizDetailPage({
                   className="h-11 tracking-wide"
                   aria-invalid={Boolean(codeError)}
                   autoComplete="off"
+                  disabled={isVerifying}
                 />
                 <FieldError>{codeError}</FieldError>
               </Field>
@@ -259,87 +282,92 @@ export function QuizDetailPage({
                 {isVerifying ? "Verifying..." : "Start quiz set"}
               </Button>
             </form>
-          </section>
-        )}
+          )}
+        </section>
+      )}
 
-        {step === "taking" && (
-          <section className="space-y-10">
-            <div className="sticky top-0 z-10 -mx-6 border-b bg-background/95 px-6 py-4 backdrop-blur">
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <p className="text-muted-foreground">
-                  {answeredCount} of {totalQuestions} answered
-                </p>
-                <p className="font-medium">{progress}%</p>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-foreground transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {quizSet.sections.map((section) => {
-                  const done = section.questions.every((q) => answers[q.id]);
-                  return (
-                    <a
-                      key={section.id}
-                      href={`#section-${section.id}`}
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs transition-colors",
-                        done
-                          ? "border-foreground bg-foreground text-background"
-                          : "hover:bg-muted",
-                      )}
-                    >
-                      {section.subject.name}
-                    </a>
-                  );
-                })}
-              </div>
+      {step === "taking" && (
+        <section className="space-y-10">
+          <div className="sticky top-0 z-10 -mx-6 border-b bg-background/95 px-6 py-4 backdrop-blur">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <p className="text-muted-foreground">
+                {answeredCount} of {totalQuestions} answered
+              </p>
+              <p className="font-medium">{progress}%</p>
             </div>
-
-            {quizSet.sections.map((section) => (
-              <SubjectSection
-                key={section.id}
-                section={section}
-                answers={answers}
-                onSelect={selectOption}
+            <div className="mt-3 h-2 overflow-hidden border bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${progress}%` }}
               />
-            ))}
-
-            <div className="flex justify-end border-t pt-6">
-              <Button
-                type="button"
-                size="lg"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Submitting..." : "Submit entire set"}
-                <CheckCircle2 className="size-4" />
-              </Button>
             </div>
-          </section>
-        )}
-      </main>
-    </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {quizSet.sections.map((section) => {
+                const done = section.questions.every((q) => answers[q.id]);
+                return (
+                  <a
+                    key={section.id}
+                    href={`#section-${section.id}`}
+                    className={cn(
+                      "border px-3 py-1 text-xs transition-colors",
+                      done
+                        ? "border-foreground bg-foreground text-background"
+                        : "hover:bg-muted",
+                    )}
+                  >
+                    {section.subject.name}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+
+          {quizSet.sections.map((section) => (
+            <SubjectSection
+              key={section.id}
+              section={section}
+              answers={answers}
+              disabled={isSubmitting}
+              onSelect={selectOption}
+            />
+          ))}
+
+          <div className="flex justify-end border-t pt-6">
+            <Button
+              type="button"
+              size="lg"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Submitting..." : "Submit entire set"}
+              <CheckCircle2 className="size-4" />
+            </Button>
+          </div>
+        </section>
+      )}
+    </PublicPageShell>
   );
 }
 
 function SubjectSection({
   section,
   answers,
+  disabled = false,
   onSelect,
 }: {
   section: PublicQuizSection;
   answers: Record<string, string>;
+  disabled?: boolean;
   onSelect: (questionId: string, optionId: string) => void;
 }) {
   return (
     <div id={`section-${section.id}`} className="scroll-mt-28 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b pb-4">
         <div>
-          <p className="text-sm text-muted-foreground">Subject section</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+            Subject section
+          </p>
+          <h2 className="mt-1 font-display text-3xl tracking-tight">
             {section.subject.name}
           </h2>
         </div>
@@ -350,14 +378,11 @@ function SubjectSection({
 
       <div className="space-y-4">
         {section.questions.map((question) => (
-          <article
-            key={question.id}
-            className="rounded-2xl border bg-card p-5 md:p-6"
-          >
-            <p className="text-sm font-medium text-muted-foreground">
+          <article key={question.id} className="border bg-card p-5 md:p-6">
+            <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
               Q{question.position}
             </p>
-            <h3 className="mt-2 text-base font-semibold leading-7 md:text-lg">
+            <h3 className="mt-2 text-base font-medium leading-7 md:text-lg">
               {question.prompt}
             </h3>
 
@@ -369,17 +394,20 @@ function SubjectSection({
                   <button
                     key={option.id}
                     type="button"
+                    disabled={disabled}
                     onClick={() => onSelect(question.id, option.id)}
                     className={cn(
-                      "flex w-full items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors",
+                      "flex w-full items-start gap-3 border px-4 py-3.5 text-left transition-colors",
                       selected
                         ? "border-foreground bg-muted"
                         : "hover:bg-muted/60",
+                      disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
+                      disabled && selected && "hover:bg-muted",
                     )}
                   >
                     <span
                       className={cn(
-                        "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-medium",
+                        "mt-0.5 flex size-7 shrink-0 items-center justify-center border text-xs font-medium",
                         selected &&
                           "border-foreground bg-foreground text-background",
                       )}
@@ -406,7 +434,7 @@ function MetaChip({
   label: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5">
+    <span className="inline-flex items-center gap-2 border px-3 py-1.5">
       {icon}
       {label}
     </span>

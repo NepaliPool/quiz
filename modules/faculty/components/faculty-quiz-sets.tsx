@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { PublicQuizSetCard } from "@/dal/public/get-quiz-sets";
@@ -7,8 +7,8 @@ import type { PublicQuizSetCard } from "@/dal/public/get-quiz-sets";
 export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] }) {
   if (quizSets.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed bg-card px-6 py-16 text-center">
-        <h3 className="text-lg font-semibold">No quiz sets yet</h3>
+      <div className="border border-dashed bg-card px-6 py-16 text-center">
+        <h3 className="font-display text-xl tracking-tight">No quiz sets yet</h3>
         <p className="mt-2 text-sm text-muted-foreground">
           This faculty does not have any published quiz sets right now.
         </p>
@@ -17,22 +17,23 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-px border bg-border md:grid-cols-2">
       {quizSets.map((set) => (
         <article
           key={set.id}
-          className="flex min-h-80 flex-col justify-between rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          className="group flex min-h-80 flex-col justify-between bg-card p-6 transition-colors hover:bg-accent/40"
         >
           <div className="space-y-5">
             <div className="flex items-start justify-between gap-4">
-              <span className="rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="border px-2 py-1 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
                 {set.sections.length} subjects
               </span>
-              <BookOpen className="size-5 shrink-0 text-muted-foreground" />
             </div>
 
             <div>
-              <h3 className="text-xl font-semibold">{set.title}</h3>
+              <h3 className="font-display text-2xl tracking-tight transition-colors group-hover:text-primary">
+                {set.title}
+              </h3>
               {set.description ? (
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {set.description}
@@ -42,7 +43,7 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
                 {set.sections.map((section) => (
                   <span
                     key={section.id}
-                    className="rounded-md border bg-muted/40 px-2.5 py-1 text-xs"
+                    className="border bg-muted/40 px-2.5 py-1 text-xs"
                   >
                     {section.subjectName} · {section.fullMarks}
                   </span>
@@ -50,7 +51,7 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-3 gap-px border bg-border text-sm">
               <Stat label="Questions" value={set.questionCount} />
               <Stat label="Total" value={set.totalMarks} />
               <Stat label="Time" value={`${set.durationMinutes} min`} />
@@ -60,7 +61,7 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
           <Button asChild className="mt-6 w-full" variant="outline">
             <Link href={`/faculty/${set.faculty.slug}/${set.slug}`}>
               Open set
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </Button>
         </article>
@@ -71,7 +72,7 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl bg-muted p-3">
+    <div className="bg-muted/50 p-3">
       <p className="font-medium">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{label}</p>
     </div>

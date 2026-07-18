@@ -12,8 +12,8 @@ export function LandingFacultiesError({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed bg-card px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-xl border">
+    <div className="flex flex-col items-center justify-center gap-4 border border-dashed bg-card px-6 py-16 text-center">
+      <div className="flex size-12 items-center justify-center border">
         <AlertTriangle className="size-5" />
       </div>
       <div className="space-y-2">
@@ -23,7 +23,12 @@ export function LandingFacultiesError({
         </p>
       </div>
       {onRetry && (
-        <Button type="button" variant="outline" onClick={onRetry}>
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-none"
+          onClick={onRetry}
+        >
           <RotateCcw className="size-4" />
           Try again
         </Button>

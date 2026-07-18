@@ -36,7 +36,7 @@ export function AdminListToolbar({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder={placeholder}
-            className="pl-9"
+            className="pl-9 rounded-none"
           />
         </div>
         {filters}
@@ -116,9 +116,9 @@ export function AdminTableSkeleton({
   columns?: number;
 }) {
   return (
-    <div className="rounded-xl border bg-card">
+    <div className="border bg-card">
       <div className="border-b p-4">
-        <Skeleton className="h-9 w-full max-w-sm" />
+        <Skeleton className="h-9 w-full max-w-sm rounded-none" />
       </div>
       <div className="space-y-3 p-4">
         {Array.from({ length: rows }).map((_, row) => (
@@ -130,7 +130,7 @@ export function AdminTableSkeleton({
             }}
           >
             {Array.from({ length: columns }).map((__, column) => (
-              <Skeleton key={column} className="h-5" />
+              <Skeleton key={column} className="h-5 rounded-none" />
             ))}
           </div>
         ))}
@@ -147,8 +147,8 @@ export function AdminEmptyState({
   description: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed bg-card px-6 py-12 text-center">
-      <h3 className="font-semibold">{title}</h3>
+    <div className="border border-dashed bg-card px-6 py-12 text-center">
+      <h3 className="font-display text-xl tracking-tight">{title}</h3>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
     </div>
   );

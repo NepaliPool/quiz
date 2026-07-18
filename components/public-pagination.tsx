@@ -29,7 +29,7 @@ export function PublicPagination({
         Showing {start}-{end} of {totalItems}
       </p>
       <div className="flex items-center gap-2">
-        <Button asChild variant="outline" size="sm" disabled={page <= 1}>
+        <Button asChild variant="outline" size="sm" className="rounded-none" disabled={page <= 1}>
           <Link
             href={hrefForPage(page - 1)}
             aria-disabled={page <= 1}
@@ -47,6 +47,7 @@ export function PublicPagination({
           asChild
           variant="outline"
           size="sm"
+          className="rounded-none"
           disabled={page >= pageCount}
         >
           <Link
