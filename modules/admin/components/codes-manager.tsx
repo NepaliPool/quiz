@@ -19,6 +19,7 @@ import {
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
+import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
   Select,
   SelectContent,
@@ -70,6 +71,9 @@ export function CodesManager({
   const list = useAdminListParams();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [pendingDelete, setPendingDelete] = useState<
+    AccessCodeListResult["items"][number] | null
+  >(null);
   const statusFilter = list.getParam("status");
   const quizFilter = list.getParam("quiz");
   const [form, setForm] = useState<CodeForm>({
@@ -136,9 +140,13 @@ export function CodesManager({
     });
   }
 
-  function handleDelete(id: string) {
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const code = pendingDelete;
+    setPendingDelete(null);
+
     startTransition(async () => {
-      const result = await deleteAccessCode({ id });
+      const result = await deleteAccessCode({ id: code.id });
 
       if (!result.success) {
         toast.error(result.message);
@@ -255,7 +263,7 @@ export function CodesManager({
                         variant="ghost"
                         disabled={isPending || code.hasAttempt}
                         className="hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => handleDelete(code.id)}
+                        onClick={() => setPendingDelete(code)}
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -276,6 +284,23 @@ export function CodesManager({
           </div>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete access code?"
+        description={
+          pendingDelete
+            ? `This will permanently delete code ${pendingDelete.code}. This cannot be undone.`
+            : "This cannot be undone."
+        }
+        confirmLabel="Delete code"
+        requireTypedConfirm
+        isPending={isPending}
+        onConfirm={confirmDelete}
+      />
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="sm:max-w-md">

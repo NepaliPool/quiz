@@ -35,7 +35,6 @@ export type ResolveAccessCodeInput = z.infer<typeof resolveAccessCodeSchema>;
 export const unlockAnswerSheetSchema = z.object({
   facultySlug: z.string().min(1),
   quizSetSlug: z.string().min(1),
-  attemptId: z.string().min(1).optional(),
   code: z
     .string()
     .trim()

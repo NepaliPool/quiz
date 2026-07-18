@@ -16,6 +16,7 @@ import {
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
+import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
   Sheet,
   SheetContent,
@@ -61,6 +62,9 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
     Partial<Record<keyof CreateFacultyInput, string>>
   >({});
   const [isPending, startTransition] = useTransition();
+  const [pendingDelete, setPendingDelete] = useState<
+    FacultyListResult["items"][number] | null
+  >(null);
 
   const showPagination = data.total > data.pageSize;
   const hasActiveFilters = Boolean(
@@ -115,7 +119,11 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
     });
   }
 
-  function handleDelete(faculty: FacultyListResult["items"][number]) {
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const faculty = pendingDelete;
+    setPendingDelete(null);
+
     startTransition(async () => {
       const result = await deleteFaculty({ id: faculty.id });
 
@@ -185,7 +193,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
                           variant="ghost"
                           disabled={isPending}
                           className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => handleDelete(faculty)}
+                          onClick={() => setPendingDelete(faculty)}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -207,6 +215,23 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
           </div>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete faculty?"
+        description={
+          pendingDelete
+            ? `This will permanently delete “${pendingDelete.name}”. This cannot be undone.`
+            : "This cannot be undone."
+        }
+        confirmLabel="Delete faculty"
+        requireTypedConfirm
+        isPending={isPending}
+        onConfirm={confirmDelete}
+      />
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="sm:max-w-md">

@@ -267,12 +267,10 @@ export async function getAttemptAnswerSheetByCode({
   facultySlug,
   quizSetSlug,
   code,
-  attemptId,
 }: {
   facultySlug: string;
   quizSetSlug: string;
   code: string;
-  attemptId?: string;
 }): Promise<AttemptAnswerSheet | null> {
   const quizSet = await getQuizSetContext(facultySlug, quizSetSlug);
 
@@ -309,10 +307,6 @@ export async function getAttemptAnswerSheetByCode({
     accessCode.attempt.status !== "completed" ||
     !accessCode.attempt.completedAt
   ) {
-    return null;
-  }
-
-  if (attemptId && accessCode.attempt.id !== attemptId) {
     return null;
   }
 
@@ -391,11 +385,10 @@ export async function getAttemptAnswerSheetByCode({
   };
 }
 
-/** @deprecated Use getAttemptResultSummary / getAttemptAnswerSheetByCode */
+/** @deprecated Use getAttemptAnswerSheetByCode */
 export async function getAttemptResult({
   facultySlug,
   quizSetSlug,
-  attemptId,
   code,
 }: {
   facultySlug: string;
@@ -403,24 +396,15 @@ export async function getAttemptResult({
   attemptId?: string;
   code?: string;
 }): Promise<AttemptResultSummary | AttemptAnswerSheet | null> {
-  if (code) {
-    return getAttemptAnswerSheetByCode({
-      facultySlug,
-      quizSetSlug,
-      code,
-      attemptId,
-    });
+  if (!code) {
+    return null;
   }
 
-  if (attemptId) {
-    return getAttemptResultSummary({
-      facultySlug,
-      quizSetSlug,
-      attemptId,
-    });
-  }
-
-  return null;
+  return getAttemptAnswerSheetByCode({
+    facultySlug,
+    quizSetSlug,
+    code,
+  });
 }
 
 export type AttemptResult = AttemptResultSummary;

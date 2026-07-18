@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import {
@@ -27,6 +27,26 @@ import {
   type UpdateQuizSetMetaInput,
 } from "@/modules/admin/schemas/quiz-set";
 
+const POSITION_PARK = 1_000_000;
+
+type IncomingQuestion = UpdateQuizSetInput["sections"][number]["questions"][number];
+
+type ExistingQuestion = {
+  id: string;
+  prompt: string;
+  marks: number;
+  position: number;
+  options: Array<{ label: string; isCorrect: boolean; position: number }>;
+};
+
+type ExistingSection = {
+  id: string;
+  subjectId: string;
+  fullMarks: number;
+  position: number;
+  questions: ExistingQuestion[];
+};
+
 async function revalidateQuizPaths(quizSetId: string, facultySlug?: string) {
   revalidatePath("/admin/quizzes");
   revalidatePath(`/admin/quizzes/${quizSetId}`);
@@ -36,6 +56,44 @@ async function revalidateQuizPaths(quizSetId: string, facultySlug?: string) {
   if (facultySlug) {
     revalidatePath(`/faculty/${facultySlug}`);
   }
+}
+
+function optionsMatch(
+  existing: Array<{ label: string; isCorrect: boolean; position: number }>,
+  next: Array<{ label: string; isCorrect: boolean }>,
+) {
+  if (existing.length !== next.length) return false;
+
+  const sorted = [...existing].sort((a, b) => a.position - b.position);
+
+  return next.every((option, index) => {
+    const current = sorted[index];
+    return (
+      Boolean(current) &&
+      current.label === option.label &&
+      current.isCorrect === option.isCorrect
+    );
+  });
+}
+
+function questionsUnchanged(
+  existing: ExistingQuestion[],
+  next: IncomingQuestion[],
+) {
+  if (existing.length !== next.length) return false;
+
+  return next.every((question, index) => {
+    const current = existing[index];
+    return (
+      Boolean(current) &&
+      Boolean(question.id) &&
+      current.id === question.id &&
+      current.prompt === question.prompt &&
+      current.marks === question.marks &&
+      current.position === index + 1 &&
+      optionsMatch(current.options, question.options)
+    );
+  });
 }
 
 export async function updateQuizSetMeta(
@@ -199,26 +257,70 @@ export async function updateQuizSet(
           .where(eq(quizSections.quizSetId, data.id));
       }
 
-      // Park existing rows at high positive positions so we can reassign
-      // 1..n without violating UNIQUE (quiz_set_id, position) or CHECK (> 0).
-      const POSITION_PARK = 1_000_000;
+      const existingSections = (await tx.query.quizSections.findMany({
+        where: eq(quizSections.quizSetId, data.id),
+        with: {
+          questions: {
+            with: {
+              options: true,
+            },
+          },
+        },
+      })) as ExistingSection[];
 
-      const existingSections = await tx
-        .select({ id: quizSections.id })
-        .from(quizSections)
-        .where(eq(quizSections.quizSetId, data.id));
+      const sectionById = new Map(
+        existingSections.map((section) => [section.id, section]),
+      );
 
-      for (const [index, section] of existingSections.entries()) {
+      if (existingSections.length > 0) {
         await tx
           .update(quizSections)
-          .set({ position: POSITION_PARK + index + 1 })
-          .where(eq(quizSections.id, section.id));
+          .set({ position: sql`${quizSections.position} + ${POSITION_PARK}` })
+          .where(eq(quizSections.quizSetId, data.id));
       }
+
+      const sectionsNeedingQuestionPark: string[] = [];
+
+      for (const section of data.sections) {
+        if (!section.id) continue;
+        const existingSection = sectionById.get(section.id);
+        if (!existingSection) continue;
+        if (!questionsUnchanged(existingSection.questions, section.questions)) {
+          sectionsNeedingQuestionPark.push(section.id);
+        }
+      }
+
+      if (sectionsNeedingQuestionPark.length > 0) {
+        await tx
+          .update(questions)
+          .set({ position: sql`${questions.position} + ${POSITION_PARK}` })
+          .where(inArray(questions.quizSectionId, sectionsNeedingQuestionPark));
+      }
+
+      const questionsToInsert: Array<{
+        id: string;
+        quizSectionId: string;
+        prompt: string;
+        marks: number;
+        position: number;
+      }> = [];
+      const optionsToInsert: Array<{
+        id: string;
+        questionId: string;
+        label: string;
+        position: 1 | 2 | 3 | 4;
+        isCorrect: boolean;
+      }> = [];
+      const questionUpdates: Array<() => Promise<unknown>> = [];
+      const optionRewriteDeletes: Array<() => Promise<unknown>> = [];
 
       for (const [sectionIndex, section] of data.sections.entries()) {
         const sectionId = section.id ?? crypto.randomUUID();
+        const existingSection = section.id
+          ? sectionById.get(section.id)
+          : undefined;
 
-        if (section.id) {
+        if (existingSection) {
           await tx
             .update(quizSections)
             .set({
@@ -242,6 +344,18 @@ export async function updateQuizSet(
           });
         }
 
+        if (
+          existingSection &&
+          questionsUnchanged(existingSection.questions, section.questions)
+        ) {
+          continue;
+        }
+
+        const existingQuestions = existingSection?.questions ?? [];
+        const existingQuestionById = new Map(
+          existingQuestions.map((question) => [question.id, question]),
+        );
+
         const keptQuestionIds = section.questions
           .map((question) => question.id)
           .filter((id): id is string => Boolean(id));
@@ -255,62 +369,107 @@ export async function updateQuizSet(
                 notInArray(questions.id, keptQuestionIds),
               ),
             );
-        } else {
+        } else if (existingQuestions.length > 0) {
           await tx
             .delete(questions)
             .where(eq(questions.quizSectionId, sectionId));
         }
 
-        const existingQuestions = await tx
-          .select({ id: questions.id })
-          .from(questions)
-          .where(eq(questions.quizSectionId, sectionId));
-
-        for (const [index, question] of existingQuestions.entries()) {
-          await tx
-            .update(questions)
-            .set({ position: POSITION_PARK + index + 1 })
-            .where(eq(questions.id, question.id));
-        }
-
         for (const [questionIndex, question] of section.questions.entries()) {
-          const questionId = question.id ?? crypto.randomUUID();
+          const position = questionIndex + 1;
 
-          if (question.id) {
-            await tx
-              .update(questions)
-              .set({
-                prompt: question.prompt,
-                marks: question.marks,
-                position: questionIndex + 1,
-              })
-              .where(
-                and(
-                  eq(questions.id, questionId),
-                  eq(questions.quizSectionId, sectionId),
-                ),
-              );
-
-            await tx.delete(options).where(eq(options.questionId, questionId));
-          } else {
-            await tx.insert(questions).values({
+          if (!question.id) {
+            const questionId = crypto.randomUUID();
+            questionsToInsert.push({
               id: questionId,
               quizSectionId: sectionId,
               prompt: question.prompt,
               marks: question.marks,
-              position: questionIndex + 1,
+              position,
             });
+
+            for (const [optionIndex, option] of question.options.entries()) {
+              optionsToInsert.push({
+                id: crypto.randomUUID(),
+                questionId,
+                label: option.label,
+                position: (optionIndex + 1) as 1 | 2 | 3 | 4,
+                isCorrect: option.isCorrect,
+              });
+            }
+            continue;
           }
 
-          await tx.insert(options).values(
-            question.options.map((option, optionIndex) => ({
-              id: crypto.randomUUID(),
-              questionId,
-              label: option.label,
-              position: (optionIndex + 1) as 1 | 2 | 3 | 4,
-              isCorrect: option.isCorrect,
-            })),
+          const existingQuestion = existingQuestionById.get(question.id);
+
+          questionUpdates.push(() =>
+            tx
+              .update(questions)
+              .set({
+                prompt: question.prompt,
+                marks: question.marks,
+                position,
+              })
+              .where(
+                and(
+                  eq(questions.id, question.id!),
+                  eq(questions.quizSectionId, sectionId),
+                ),
+              ),
           );
+
+          const shouldRewriteOptions =
+            !existingQuestion ||
+            !optionsMatch(existingQuestion.options, question.options);
+
+          if (shouldRewriteOptions) {
+            const questionId = question.id;
+            optionRewriteDeletes.push(() =>
+              tx.delete(options).where(eq(options.questionId, questionId)),
+            );
+
+            for (const [optionIndex, option] of question.options.entries()) {
+              optionsToInsert.push({
+                id: crypto.randomUUID(),
+                questionId,
+                label: option.label,
+                position: (optionIndex + 1) as 1 | 2 | 3 | 4,
+                isCorrect: option.isCorrect,
+              });
+            }
+          }
+        }
+      }
+
+      const chunkSize = 40;
+
+      for (let i = 0; i < optionRewriteDeletes.length; i += chunkSize) {
+        await Promise.all(
+          optionRewriteDeletes.slice(i, i + chunkSize).map((run) => run()),
+        );
+      }
+
+      for (let i = 0; i < questionUpdates.length; i += chunkSize) {
+        await Promise.all(
+          questionUpdates.slice(i, i + chunkSize).map((run) => run()),
+        );
+      }
+
+      if (questionsToInsert.length > 0) {
+        const insertChunk = 100;
+        for (let i = 0; i < questionsToInsert.length; i += insertChunk) {
+          await tx
+            .insert(questions)
+            .values(questionsToInsert.slice(i, i + insertChunk));
+        }
+      }
+
+      if (optionsToInsert.length > 0) {
+        const insertChunk = 200;
+        for (let i = 0; i < optionsToInsert.length; i += insertChunk) {
+          await tx
+            .insert(options)
+            .values(optionsToInsert.slice(i, i + insertChunk));
         }
       }
     });

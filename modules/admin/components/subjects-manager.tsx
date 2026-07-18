@@ -16,6 +16,7 @@ import {
   AdminListToolbar,
   AdminPagination,
 } from "@/modules/admin/components/admin-list-states";
+import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
   Select,
   SelectContent,
@@ -73,6 +74,9 @@ export function SubjectsManager({
     Partial<Record<keyof CreateSubjectInput, string>>
   >({});
   const [isPending, startTransition] = useTransition();
+  const [pendingDelete, setPendingDelete] = useState<
+    SubjectListResult["items"][number] | null
+  >(null);
 
   const showPagination = data.total > data.pageSize;
   const hasActiveFilters = Boolean(
@@ -132,7 +136,11 @@ export function SubjectsManager({
     });
   }
 
-  function handleDelete(subject: SubjectListResult["items"][number]) {
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const subject = pendingDelete;
+    setPendingDelete(null);
+
     startTransition(async () => {
       const result = await deleteSubject({ id: subject.id });
 
@@ -222,7 +230,7 @@ export function SubjectsManager({
                           variant="ghost"
                           disabled={isPending}
                           className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => handleDelete(subject)}
+                          onClick={() => setPendingDelete(subject)}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -244,6 +252,23 @@ export function SubjectsManager({
           </div>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete subject?"
+        description={
+          pendingDelete
+            ? `This will permanently delete “${pendingDelete.name}”. This cannot be undone.`
+            : "This cannot be undone."
+        }
+        confirmLabel="Delete subject"
+        requireTypedConfirm
+        isPending={isPending}
+        onConfirm={confirmDelete}
+      />
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="sm:max-w-md">
