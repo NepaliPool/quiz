@@ -11,3 +11,14 @@ export async function requireAdminForDal() {
 
   return admin;
 }
+
+/** For server-action queryFns — throw instead of redirect so React Query can handle errors. */
+export async function assertAdmin() {
+  const admin = await getCurrentAdmin();
+
+  if (!admin.success) {
+    throw new Error(admin.message);
+  }
+
+  return admin;
+}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, useTransition } from "react";
 import { ArrowLeft, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ import { slugify } from "@/lib/slugify";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import { QuizQuestionsPreviewTrigger } from "@/modules/admin/components/quiz-questions-preview";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
+import { adminKeys } from "@/modules/admin/hooks/queries/keys";
 import {
   updateQuizSetMetaSchema,
   updateQuizSetSchema,
@@ -169,6 +171,7 @@ export function QuizDetailEditor({
   facultySubjects?: SubjectOption[];
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [isPublishPending, setIsPublishPending] = useState(false);
   const [quizSet, setQuizSet] = useState(() => toEditorState(initialQuizSet));
@@ -189,6 +192,13 @@ export function QuizDetailEditor({
   const structureBaselineRef = useRef(
     structureSignature(toEditorState(initialQuizSet).sections),
   );
+
+  async function invalidateQuizLists() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: adminKeys.quizSetsRoot() }),
+      queryClient.invalidateQueries({ queryKey: adminKeys.accessCodesRoot() }),
+    ]);
+  }
 
   const usedSubjectIds = new Set(
     quizSet.sections.map((section) => section.subjectId),
@@ -344,7 +354,7 @@ export function QuizDetailEditor({
           result.message ??
             (nextPublished ? "Quiz set published." : "Quiz set unpublished."),
         );
-        router.refresh();
+        await invalidateQuizLists();
       } catch {
         setQuizSet((current) => ({
           ...current,
@@ -390,7 +400,7 @@ export function QuizDetailEditor({
         }
 
         toast.success(result.message ?? "Saved.");
-        router.refresh();
+        await invalidateQuizLists();
         return;
       }
 
@@ -457,7 +467,7 @@ export function QuizDetailEditor({
       setQuizSet(nextState);
       structureBaselineRef.current = structureSignature(nextState.sections);
       toast.success(result.message ?? "Saved.");
-      router.refresh();
+      await invalidateQuizLists();
     });
   }
 
@@ -486,8 +496,8 @@ export function QuizDetailEditor({
       }
 
       toast.success(result.message ?? "Deleted.");
+      await invalidateQuizLists();
       router.push("/admin/quizzes");
-      router.refresh();
     });
   }
 

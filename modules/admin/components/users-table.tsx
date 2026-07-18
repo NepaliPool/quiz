@@ -6,6 +6,7 @@ import {
   AdminListResults,
   AdminListToolbar,
   AdminPagination,
+  AdminTableSkeleton,
 } from "@/modules/admin/components/admin-list-states";
 import {
   Select,
@@ -22,16 +23,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { UserListResult } from "@/dal/admin/get-users";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
+import { useUsersQuery } from "@/modules/admin/hooks/queries/use-users";
 
-export function UsersTable({ data }: { data: UserListResult }) {
+export function UsersTable() {
   const list = useAdminListParams();
   const roleFilter = list.getParam("role");
-  const showPagination = data.total > data.pageSize;
+  const filters = {
+    q: list.committedQuery,
+    role: roleFilter,
+    page: list.page,
+  };
+  const { data, isPending, isFetching, isError, error } =
+    useUsersQuery(filters);
+
+  const showPagination = data ? data.total > data.pageSize : false;
   const hasActiveFilters = Boolean(
     list.query.trim() || roleFilter !== "all" || list.searchParams.get("page"),
   );
+  const resultsPending = list.isPending || isFetching;
 
   return (
     <div className="space-y-4">
@@ -40,7 +50,7 @@ export function UsersTable({ data }: { data: UserListResult }) {
         onQueryChange={list.setQuery}
         onClearFilters={() => list.clearFilters(["role"])}
         showClear={hasActiveFilters}
-        isPending={list.isPending}
+        isPending={resultsPending}
         placeholder="Search by name or email"
         filters={
           <Select
@@ -60,50 +70,59 @@ export function UsersTable({ data }: { data: UserListResult }) {
         }
       />
 
-      <AdminListResults isPending={list.isPending}>
-      {data.items.length === 0 ? (
+      {isPending && !data ? (
+        <AdminTableSkeleton columns={4} />
+      ) : isError ? (
         <AdminEmptyState
-          title="No users found"
-          description="Try a different search or role filter."
+          title="Couldn’t load users"
+          description={error instanceof Error ? error.message : "Try again."}
         />
-      ) : (
-        <div className="overflow-hidden border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.items.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{user.role}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.createdAt}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {showPagination ? (
-            <AdminPagination
-              page={data.page}
-              pageCount={data.pageCount}
-              totalItems={data.total}
-              pageSize={data.pageSize}
-              onPageChange={list.setPage}
+      ) : data ? (
+        <AdminListResults isPending={resultsPending}>
+          {data.items.length === 0 ? (
+            <AdminEmptyState
+              title="No users found"
+              description="Try a different search or role filter."
             />
-          ) : null}
-        </div>
-      )}
-      </AdminListResults>
+          ) : (
+            <div className="overflow-hidden border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Joined</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.items.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{user.role}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {user.createdAt}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {showPagination ? (
+                <AdminPagination
+                  page={data.page}
+                  pageCount={data.pageCount}
+                  totalItems={data.total}
+                  pageSize={data.pageSize}
+                  onPageChange={list.setPage}
+                />
+              ) : null}
+            </div>
+          )}
+        </AdminListResults>
+      ) : null}
     </div>
   );
 }

@@ -29,13 +29,17 @@ export async function getUsers({
   role,
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
+  skipAuth = false,
 }: {
   q?: string;
   role?: string;
   page?: number;
   pageSize?: number;
+  skipAuth?: boolean;
 } = {}): Promise<UserListResult> {
-  await requireAdminForDal();
+  if (!skipAuth) {
+    await requireAdminForDal();
+  }
 
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
   const query = q.trim();

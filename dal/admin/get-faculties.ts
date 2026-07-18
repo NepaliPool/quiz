@@ -23,18 +23,23 @@ export type FacultyListResult = {
 export type FacultyOption = {
   id: string;
   name: string;
+  slug: string;
 };
 
 export async function getFaculties({
   q = "",
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
+  skipAuth = false,
 }: {
   q?: string;
   page?: number;
   pageSize?: number;
+  skipAuth?: boolean;
 } = {}): Promise<FacultyListResult> {
-  await requireAdminForDal();
+  if (!skipAuth) {
+    await requireAdminForDal();
+  }
 
   const safePageSize = Math.min(Math.max(1, pageSize), 100);
   const safePage = Math.max(1, page);
@@ -86,6 +91,7 @@ export async function getFacultyOptions(): Promise<FacultyOption[]> {
     .select({
       id: faculties.id,
       name: faculties.name,
+      slug: faculties.slug,
     })
     .from(faculties)
     .orderBy(asc(faculties.name));

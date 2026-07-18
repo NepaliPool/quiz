@@ -1,7 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ import {
   AdminListResults,
   AdminListToolbar,
   AdminPagination,
+  AdminTableSkeleton,
 } from "@/modules/admin/components/admin-list-states";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
@@ -44,7 +45,10 @@ import {
 import { getZodFieldErrors } from "@/lib/action-result";
 import type { FacultyOption } from "@/dal/admin/get-faculties";
 import type { SubjectListResult } from "@/dal/admin/get-subjects";
+import { adminKeys } from "@/modules/admin/hooks/queries/keys";
+import { useSubjectsQuery } from "@/modules/admin/hooks/queries/use-subjects";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
+import { resolveFacultyId } from "@/modules/admin/lib/resolve-list-filter";
 import {
   createSubjectSchema,
   type CreateSubjectInput,
@@ -56,15 +60,22 @@ type SubjectForm = {
 };
 
 export function SubjectsManager({
-  data,
   faculties,
 }: {
-  data: SubjectListResult;
   faculties: FacultyOption[];
 }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const list = useAdminListParams();
-  const facultyFilter = list.getParam("faculty");
+  const facultyParam = list.getParam("faculty");
+  const facultyId = resolveFacultyId(facultyParam, faculties);
+  const filters = {
+    q: list.committedQuery,
+    facultyId,
+    page: list.page,
+  };
+  const { data, isPending, isFetching, isError, error } =
+    useSubjectsQuery(filters);
+
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<SubjectForm>({
@@ -74,17 +85,25 @@ export function SubjectsManager({
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof CreateSubjectInput, string>>
   >({});
-  const [isPending, startTransition] = useTransition();
+  const [isMutating, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<
     SubjectListResult["items"][number] | null
   >(null);
 
-  const showPagination = data.total > data.pageSize;
+  const showPagination = data ? data.total > data.pageSize : false;
   const hasActiveFilters = Boolean(
     list.query.trim() ||
-      facultyFilter !== "all" ||
+      facultyParam !== "all" ||
       list.searchParams.get("page"),
   );
+  const resultsPending = list.isPending || isFetching;
+
+  async function invalidateSubjectLists() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: adminKeys.subjectsRoot() }),
+      queryClient.invalidateQueries({ queryKey: adminKeys.quizSetsRoot() }),
+    ]);
+  }
 
   function openCreate() {
     setEditingId(null);
@@ -133,7 +152,7 @@ export function SubjectsManager({
 
       toast.success(result.message ?? "Saved.");
       setOpen(false);
-      router.refresh();
+      await invalidateSubjectLists();
     });
   }
 
@@ -151,7 +170,7 @@ export function SubjectsManager({
       }
 
       toast.success(result.message ?? "Deleted.");
-      router.refresh();
+      await invalidateSubjectLists();
     });
   }
 
@@ -163,11 +182,11 @@ export function SubjectsManager({
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters(["faculty"])}
           showClear={hasActiveFilters}
-          isPending={list.isPending}
+          isPending={resultsPending}
           placeholder="Search by subject name"
           filters={
             <Select
-              value={facultyFilter}
+              value={facultyParam}
               onValueChange={(value) => list.setParam("faculty", value)}
             >
               <SelectTrigger className="w-full sm:w-56">
@@ -176,7 +195,7 @@ export function SubjectsManager({
               <SelectContent>
                 <SelectItem value="all">All faculties</SelectItem>
                 {faculties.map((faculty) => (
-                  <SelectItem key={faculty.id} value={faculty.id}>
+                  <SelectItem key={faculty.id} value={faculty.slug}>
                     {faculty.name}
                   </SelectItem>
                 ))}
@@ -191,70 +210,79 @@ export function SubjectsManager({
           }
         />
 
-        <AdminListResults isPending={list.isPending}>
-        {data.items.length === 0 ? (
+        {isPending && !data ? (
+          <AdminTableSkeleton columns={3} />
+        ) : isError ? (
           <AdminEmptyState
-            title="No subjects found"
-            description={
-              faculties.length === 0
-                ? "Create a faculty before adding subjects."
-                : "Try a different search or faculty filter, or create a new subject."
-            }
+            title="Couldn’t load subjects"
+            description={error instanceof Error ? error.message : "Try again."}
           />
-        ) : (
-          <div className="overflow-hidden border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Faculty</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.map((subject) => (
-                  <TableRow key={subject.id}>
-                    <TableCell className="font-medium">
-                      {subject.name}
-                    </TableCell>
-                    <TableCell>{subject.facultyName}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={isPending}
-                          onClick={() => openEdit(subject)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={isPending}
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setPendingDelete(subject)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {showPagination ? (
-              <AdminPagination
-                page={data.page}
-                pageCount={data.pageCount}
-                totalItems={data.total}
-                pageSize={data.pageSize}
-                onPageChange={list.setPage}
+        ) : data ? (
+          <AdminListResults isPending={resultsPending}>
+            {data.items.length === 0 ? (
+              <AdminEmptyState
+                title="No subjects found"
+                description={
+                  faculties.length === 0
+                    ? "Create a faculty before adding subjects."
+                    : "Try a different search or faculty filter, or create a new subject."
+                }
               />
-            ) : null}
-          </div>
-        )}
-        </AdminListResults>
+            ) : (
+              <div className="overflow-hidden border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Faculty</TableHead>
+                      <TableHead className="w-28 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.items.map((subject) => (
+                      <TableRow key={subject.id}>
+                        <TableCell className="font-medium">
+                          {subject.name}
+                        </TableCell>
+                        <TableCell>{subject.facultyName}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isMutating}
+                              onClick={() => openEdit(subject)}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isMutating}
+                              className="hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setPendingDelete(subject)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {showPagination ? (
+                  <AdminPagination
+                    page={data.page}
+                    pageCount={data.pageCount}
+                    totalItems={data.total}
+                    pageSize={data.pageSize}
+                    onPageChange={list.setPage}
+                  />
+                ) : null}
+              </div>
+            )}
+          </AdminListResults>
+        ) : null}
       </div>
 
       <ConfirmDeleteDialog
@@ -270,7 +298,7 @@ export function SubjectsManager({
         }
         confirmLabel="Delete subject"
         requireTypedConfirm
-        isPending={isPending}
+        isPending={isMutating}
         onConfirm={confirmDelete}
       />
 
@@ -334,7 +362,7 @@ export function SubjectsManager({
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isPending}>
+            <Button onClick={handleSave} disabled={isMutating}>
               {editingId ? "Save changes" : "Create subject"}
             </Button>
           </SheetFooter>

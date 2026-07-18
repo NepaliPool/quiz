@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ import { slugify } from "@/lib/slugify";
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import { QuizQuestionsPreviewTrigger } from "@/modules/admin/components/quiz-questions-preview";
+import { adminKeys } from "@/modules/admin/hooks/queries/keys";
 import {
   createQuizSetSchema,
   type CreateQuizSetInput,
@@ -84,6 +86,7 @@ export function QuizCreateForm({
   subjects: SubjectOption[];
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -248,6 +251,9 @@ export function QuizCreateForm({
       }
 
       toast.success(result.message ?? "Quiz set created.");
+      await queryClient.invalidateQueries({
+        queryKey: adminKeys.quizSetsRoot(),
+      });
       router.push("/admin/quizzes");
     });
   }

@@ -117,11 +117,13 @@ export function useAdminListParams() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, pathname]);
 
-  const pageFromUrl = Number(
-    (optimisticParamsRef.current !== null
-      ? new URLSearchParams(optimisticParamsRef.current).get("page")
-      : searchParams.get("page")) ?? "1",
-  );
+  const workingParams =
+    optimisticParamsRef.current !== null
+      ? new URLSearchParams(optimisticParamsRef.current)
+      : searchParams;
+  /** Debounced/committed `q` from the URL — use for query keys, not live input. */
+  const committedQuery = workingParams.get("q") ?? "";
+  const pageFromUrl = Number(workingParams.get("page") ?? "1");
   const page = Number.isFinite(pageFromUrl) ? Math.max(1, pageFromUrl) : 1;
 
   function setPage(nextPage: number) {
@@ -180,6 +182,7 @@ export function useAdminListParams() {
   return {
     query,
     setQuery,
+    committedQuery,
     page,
     setPage,
     clearFilters,

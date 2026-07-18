@@ -1,7 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ import {
   AdminListResults,
   AdminListToolbar,
   AdminPagination,
+  AdminTableSkeleton,
 } from "@/modules/admin/components/admin-list-states";
 import { ConfirmDeleteDialog } from "@/modules/admin/components/confirm-delete-dialog";
 import {
@@ -37,6 +38,8 @@ import {
 import { getZodFieldErrors } from "@/lib/action-result";
 import { slugify } from "@/lib/slugify";
 import type { FacultyListResult } from "@/dal/admin/get-faculties";
+import { adminKeys } from "@/modules/admin/hooks/queries/keys";
+import { useFacultiesQuery } from "@/modules/admin/hooks/queries/use-faculties";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
 import {
   createFacultySchema,
@@ -53,24 +56,40 @@ const emptyForm: FacultyForm = {
   slug: "",
 };
 
-export function FacultiesManager({ data }: { data: FacultyListResult }) {
-  const router = useRouter();
+export function FacultiesManager() {
+  const queryClient = useQueryClient();
   const list = useAdminListParams();
+  const filters = {
+    q: list.committedQuery,
+    page: list.page,
+  };
+  const { data, isPending, isFetching, isError, error } =
+    useFacultiesQuery(filters);
+
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FacultyForm>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof CreateFacultyInput, string>>
   >({});
-  const [isPending, startTransition] = useTransition();
+  const [isMutating, startTransition] = useTransition();
   const [pendingDelete, setPendingDelete] = useState<
     FacultyListResult["items"][number] | null
   >(null);
 
-  const showPagination = data.total > data.pageSize;
+  const showPagination = data ? data.total > data.pageSize : false;
   const hasActiveFilters = Boolean(
     list.query.trim() || list.searchParams.get("page"),
   );
+  const resultsPending = list.isPending || isFetching;
+
+  async function invalidateFacultyLists() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: adminKeys.facultiesRoot() }),
+      queryClient.invalidateQueries({ queryKey: adminKeys.subjectsRoot() }),
+      queryClient.invalidateQueries({ queryKey: adminKeys.quizSetsRoot() }),
+    ]);
+  }
 
   function openCreate() {
     setEditingId(null);
@@ -116,7 +135,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
 
       toast.success(result.message ?? "Saved.");
       setOpen(false);
-      router.refresh();
+      await invalidateFacultyLists();
     });
   }
 
@@ -134,7 +153,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
       }
 
       toast.success(result.message ?? "Deleted.");
-      router.refresh();
+      await invalidateFacultyLists();
     });
   }
 
@@ -146,7 +165,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
           onQueryChange={list.setQuery}
           onClearFilters={() => list.clearFilters()}
           showClear={hasActiveFilters}
-          isPending={list.isPending}
+          isPending={resultsPending}
           placeholder="Search by name or slug"
           actions={
             <Button onClick={openCreate}>
@@ -156,68 +175,77 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
           }
         />
 
-        <AdminListResults isPending={list.isPending}>
-        {data.items.length === 0 ? (
+        {isPending && !data ? (
+          <AdminTableSkeleton columns={3} />
+        ) : isError ? (
           <AdminEmptyState
-            title="No faculties found"
-            description="Try a different search term or create a new faculty."
+            title="Couldn’t load faculties"
+            description={error instanceof Error ? error.message : "Try again."}
           />
-        ) : (
-          <div className="overflow-hidden border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.map((faculty) => (
-                  <TableRow key={faculty.id}>
-                    <TableCell className="font-medium">
-                      {faculty.name}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {faculty.slug}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={isPending}
-                          onClick={() => openEdit(faculty)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          disabled={isPending}
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setPendingDelete(faculty)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {showPagination ? (
-              <AdminPagination
-                page={data.page}
-                pageCount={data.pageCount}
-                totalItems={data.total}
-                pageSize={data.pageSize}
-                onPageChange={list.setPage}
+        ) : data ? (
+          <AdminListResults isPending={resultsPending}>
+            {data.items.length === 0 ? (
+              <AdminEmptyState
+                title="No faculties found"
+                description="Try a different search term or create a new faculty."
               />
-            ) : null}
-          </div>
-        )}
-        </AdminListResults>
+            ) : (
+              <div className="overflow-hidden border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead className="w-28 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.items.map((faculty) => (
+                      <TableRow key={faculty.id}>
+                        <TableCell className="font-medium">
+                          {faculty.name}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {faculty.slug}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isMutating}
+                              onClick={() => openEdit(faculty)}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={isMutating}
+                              className="hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setPendingDelete(faculty)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {showPagination ? (
+                  <AdminPagination
+                    page={data.page}
+                    pageCount={data.pageCount}
+                    totalItems={data.total}
+                    pageSize={data.pageSize}
+                    onPageChange={list.setPage}
+                  />
+                ) : null}
+              </div>
+            )}
+          </AdminListResults>
+        ) : null}
       </div>
 
       <ConfirmDeleteDialog
@@ -233,7 +261,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
         }
         confirmLabel="Delete faculty"
         requireTypedConfirm
-        isPending={isPending}
+        isPending={isMutating}
         onConfirm={confirmDelete}
       />
 
@@ -291,7 +319,7 @@ export function FacultiesManager({ data }: { data: FacultyListResult }) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isPending}>
+            <Button onClick={handleSave} disabled={isMutating}>
               {editingId ? "Save changes" : "Create faculty"}
             </Button>
           </SheetFooter>

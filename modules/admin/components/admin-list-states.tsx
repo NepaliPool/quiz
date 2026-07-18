@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AdminPageHeader } from "@/modules/admin/components/admin-page-header";
 
 export function AdminListToolbar({
   query,
@@ -69,15 +70,24 @@ export function AdminListResults({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={
-        isPending
-          ? "opacity-60 transition-opacity duration-150"
-          : "opacity-100 transition-opacity duration-150"
-      }
-      aria-busy={isPending}
-    >
-      {children}
+    <div className="relative" aria-busy={isPending}>
+      {isPending ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-muted"
+          aria-hidden
+        >
+          <div className="h-full w-1/3 animate-pulse bg-foreground/40" />
+        </div>
+      ) : null}
+      <div
+        className={
+          isPending
+            ? "opacity-50 transition-opacity duration-150"
+            : "opacity-100 transition-opacity duration-150"
+        }
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -135,30 +145,63 @@ export function AdminPagination({
 export function AdminTableSkeleton({
   rows = 6,
   columns = 4,
+  showToolbar = false,
 }: {
   rows?: number;
   columns?: number;
+  /** Include a fake search row — use in route `loading.tsx`, not under a live toolbar. */
+  showToolbar?: boolean;
 }) {
   return (
-    <div className="border bg-card">
-      <div className="border-b p-4">
-        <Skeleton className="h-9 w-full max-w-sm rounded-none" />
+    <div className="space-y-4">
+      {showToolbar ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Skeleton className="h-9 w-full max-w-xs rounded-none bg-muted" />
+          <Skeleton className="h-9 w-full rounded-none bg-muted sm:w-40" />
+        </div>
+      ) : null}
+      <div className="overflow-hidden border bg-card">
+        <div className="space-y-0 divide-y">
+          {Array.from({ length: rows }).map((_, row) => (
+            <div
+              key={row}
+              className="grid gap-3 px-4 py-3.5"
+              style={{
+                gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              }}
+            >
+              {Array.from({ length: columns }).map((__, column) => (
+                <Skeleton
+                  key={column}
+                  className="h-5 rounded-none bg-muted"
+                  style={{
+                    width: column === 0 ? "70%" : "85%",
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="space-y-3 p-4">
-        {Array.from({ length: rows }).map((_, row) => (
-          <div
-            key={row}
-            className="grid gap-3"
-            style={{
-              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-            }}
-          >
-            {Array.from({ length: columns }).map((__, column) => (
-              <Skeleton key={column} className="h-5 rounded-none" />
-            ))}
-          </div>
-        ))}
-      </div>
+    </div>
+  );
+}
+
+export function AdminListPageSkeleton({
+  title,
+  description,
+  columns = 4,
+  rows = 6,
+}: {
+  title: string;
+  description?: string;
+  columns?: number;
+  rows?: number;
+}) {
+  return (
+    <div className="space-y-6">
+      <AdminPageHeader title={title} description={description} />
+      <AdminTableSkeleton columns={columns} rows={rows} showToolbar />
     </div>
   );
 }
