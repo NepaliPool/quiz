@@ -132,7 +132,8 @@ export function MathSourceField({
           rows={rows}
           placeholder={placeholder}
           className={cn(
-            "min-h-18 w-full resize-y whitespace-pre-wrap",
+            "min-h-18 w-full resize-y whitespace-pre-wrap border border-input px-3 py-2",
+            className,
             inputClassName,
           )}
           onChange={(event) => onChange(event.target.value)}
@@ -149,7 +150,9 @@ export function MathSourceField({
         disabled={disabled}
         placeholder={placeholder}
         className={cn(
-          "h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0",
+          "h-8 min-h-8 border border-input bg-transparent px-0 py-1.5 shadow-none",
+          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+          className,
           inputClassName,
         )}
         onChange={(event) => onChange(event.target.value)}
@@ -176,7 +179,6 @@ export function MathSourceField({
         multiline ? "min-h-18 px-3 py-2" : "min-h-8 px-0 py-1.5",
         className,
       )}
-      aria-label={placeholder ?? "Edit field"}
     >
       {value.trim() ? (
         <MathText

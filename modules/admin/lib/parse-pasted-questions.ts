@@ -47,7 +47,9 @@ D) Madrid
 Math (LaTeX) is supported and rendered for students:
 Q: $(\\int \\frac{dx}{x^2-1})$ is equal to:
 A) $(\\frac{1}{2}\\log|\\frac{x-1}{x+1}|+C)$
-B) $(\\frac{1}{2}\\log|\\frac{x+1}{x-1}|+C)$ *`;
+B) $(\\frac{1}{2}\\log|\\frac{x+1}{x-1}|+C)$ *
+C) $(\\log|x^2-1|+C)$
+D) $(-\\frac{1}{2}\\log|\\frac{x-1}{x+1}|+C)$`;
 
 function newId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -70,6 +72,7 @@ export function normalizeMathPaste(text: string): string {
   let result = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
 
   // Digits duplicated around frac (OCR / copy artifact) → real LaTeX
+  // e.g. "12\frac{1}{2}21" → "\frac{1}{2}"
   result = result.replace(
     /(\d+)(\d+)\\frac\{\1\}\{\2\}\2\1/g,
     "\\frac{$1}{$2}",
@@ -79,7 +82,7 @@ export function normalizeMathPaste(text: string): string {
   result = result.replace(/\\frac(\d)(\d)/g, "\\frac{$1}{$2}");
 
   // ChatGPT often uses commas instead of \, before dx
-  result = result.replace(/,(?=dx\b)/gi, "\\,");
+  result = result.replace(/,\s*(?=dx\b)/gi, "\\,");
 
   // Normalize \(...\) / \[...\] to $ / $$
   result = result.replace(/\\\(([\s\S]+?)\\\)/g, (_match, inner: string) => {
@@ -89,9 +92,23 @@ export function normalizeMathPaste(text: string): string {
     return `$$${inner}$$`;
   });
 
+  let insideDisplayMath = false;
   return result
     .split("\n")
-    .map((line) => wrapLatexForKatex(line.trim()))
+    .map((line) => {
+      const trimmed = line.trim();
+      const displayDelimiters = (trimmed.match(/\$\$/g) ?? []).length;
+
+      const next = insideDisplayMath
+        ? trimmed
+        : wrapLatexForKatex(trimmed);
+
+      if (displayDelimiters % 2 === 1) {
+        insideDisplayMath = !insideDisplayMath;
+      }
+
+      return next;
+    })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -99,6 +116,12 @@ export function normalizeMathPaste(text: string): string {
 
 function looksLikeLatex(value: string) {
   return /\\[a-zA-Z]+/.test(value);
+}
+
+/** True when, after stripping LaTeX commands/groups, no prose words remain. */
+function looksLikePureMath(value: string) {
+  const stripped = value.replace(/\\[a-zA-Z]+(\{[^{}]*\})*/g, "");
+  return !/[a-zA-Z]{3,}/.test(stripped);
 }
 
 /**
@@ -157,7 +180,7 @@ function wrapLatexForKatex(line: string): string {
   const trimmed = result.replace(/\s{2,}/g, " ").trim();
 
   // Pure math option/line with no parentheses wrapper
-  if (!wrappedAny && looksLikeLatex(trimmed) && !trimmed.includes("$")) {
+  if (!wrappedAny && looksLikePureMath(trimmed) && !trimmed.includes("$")) {
     return `$${trimmed}$`;
   }
 

@@ -652,14 +652,8 @@ export function QuizCreateForm({
 
                     <div className="space-y-1.5">
                       {question.options.map((option, optionIndex) => (
-                        <button
+                        <div
                           key={option.id}
-                          type="button"
-                          onClick={() =>
-                            updateOption(section.id, question.id, option.id, {
-                              isCorrect: true,
-                            })
-                          }
                           className={cn(
                             "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
                             option.isCorrect
@@ -667,15 +661,23 @@ export function QuizCreateForm({
                               : "border-transparent hover:bg-muted/50",
                           )}
                         >
-                          <span
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateOption(section.id, question.id, option.id, {
+                                isCorrect: true,
+                              })
+                            }
+                            aria-label={`Mark option ${String.fromCharCode(65 + optionIndex)} as correct`}
                             className={cn(
-                              "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium",
-                              option.isCorrect &&
-                                "border-foreground bg-foreground text-background",
+                              "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                              option.isCorrect
+                                ? "border-foreground bg-foreground text-background"
+                                : "hover:bg-muted-foreground/10",
                             )}
                           >
                             {String.fromCharCode(65 + optionIndex)}
-                          </span>
+                          </button>
                           <div className="min-w-0 flex-1">
                             <MathSourceField
                               value={option.label}
@@ -687,7 +689,6 @@ export function QuizCreateForm({
                                   { label },
                                 )
                               }
-                              onClick={(event) => event.stopPropagation()}
                               placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                               className="border-0 hover:bg-transparent focus-visible:ring-0"
                             />
@@ -697,7 +698,7 @@ export function QuizCreateForm({
                               Correct
                             </span>
                           ) : null}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </div>
