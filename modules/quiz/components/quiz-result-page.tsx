@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { unlockAnswerSheet } from "@/actions/quiz/unlock-answer-sheet";
+import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -276,9 +277,11 @@ function QuestionReview({ question }: { question: AnswerSheetQuestion }) {
         </span>
       </div>
 
-      <h4 className="mt-2 whitespace-pre-wrap text-base font-medium leading-7 md:text-lg">
-        {question.prompt}
-      </h4>
+      <MathText
+        as="h4"
+        text={question.prompt}
+        className="mt-2 text-base font-medium leading-7 md:text-lg"
+      />
 
       <div className="mt-5 space-y-2.5">
         {question.options.map((option, index) => (
@@ -329,7 +332,7 @@ function OptionRow({
         {letter}
       </span>
       <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-sm leading-6">{option.label}</p>
+        <MathText text={option.label} className="text-sm leading-6" />
         <div className="flex flex-wrap gap-2 text-xs font-medium">
           {option.isSelected ? (
             <span

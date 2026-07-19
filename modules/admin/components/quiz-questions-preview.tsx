@@ -4,6 +4,7 @@ import { Eye } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MathText } from "@/components/math-text";
 import {
   Sheet,
   SheetContent,
@@ -238,14 +239,14 @@ function PreviewQuestionCard({
         ) : null}
       </div>
 
-      <h4
+      <MathText
+        as="h4"
+        text={prompt || "Untitled question"}
         className={cn(
-          "mt-2 whitespace-pre-wrap text-base font-medium leading-7 md:text-lg",
+          "mt-2 text-base font-medium leading-7 md:text-lg",
           !prompt && "text-muted-foreground italic",
         )}
-      >
-        {prompt || "Untitled question"}
-      </h4>
+      />
 
       <div className="mt-5 space-y-2.5">
         {question.options.map((option, index) => {
@@ -271,14 +272,13 @@ function PreviewQuestionCard({
               >
                 {OPTION_LETTERS[index] ?? String(index + 1)}
               </span>
-              <span
+              <MathText
+                text={label || "Empty option"}
                 className={cn(
                   "min-w-0 flex-1 text-sm leading-6",
                   !label && "text-muted-foreground italic",
                 )}
-              >
-                {label || "Empty option"}
-              </span>
+              />
               {highlight ? (
                 <span className="mt-0.5 shrink-0 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Correct
