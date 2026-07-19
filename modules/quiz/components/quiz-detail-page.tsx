@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { startAttempt } from "@/actions/quiz/start-attempt";
 import { submitAttempt } from "@/actions/quiz/submit-attempt";
+import { MathText } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -395,9 +396,11 @@ function SubjectSection({
             <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
               Q{question.position}
             </p>
-            <h3 className="mt-2 whitespace-pre-wrap text-base font-medium leading-7 md:text-lg">
-              {question.prompt}
-            </h3>
+            <MathText
+              as="h3"
+              text={question.prompt}
+              className="mt-2 text-base font-medium leading-7 md:text-lg"
+            />
 
             <div className="mt-5 space-y-2.5">
               {question.options.map((option, index) => {
@@ -428,7 +431,10 @@ function SubjectSection({
                     >
                       {OPTION_LETTERS[index]}
                     </span>
-                    <span className="text-sm leading-6">{option.label}</span>
+                    <MathText
+                      text={option.label}
+                      className="text-sm leading-6"
+                    />
                   </button>
                 );
               })}

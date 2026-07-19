@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { createQuizSet } from "@/actions/admin/quizzes/create";
+import { MathSourceField } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -618,17 +619,17 @@ export function QuizCreateForm({
                       <span className="mt-2.5 shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                         Q{questionIndex + 1}
                       </span>
-                      <Textarea
-                        value={question.prompt}
-                        onChange={(event) =>
-                          updateQuestion(section.id, question.id, {
-                            prompt: event.target.value,
-                          })
-                        }
-                        rows={3}
-                        className="min-h-18 flex-1 resize-y whitespace-pre-wrap"
-                        placeholder="Question prompt"
-                      />
+                      <div className="min-w-0 flex-1">
+                        <MathSourceField
+                          multiline
+                          rows={3}
+                          value={question.prompt}
+                          onChange={(prompt) =>
+                            updateQuestion(section.id, question.id, { prompt })
+                          }
+                          placeholder="Question prompt"
+                        />
+                      </div>
                       {section.questions.length > 1 ? (
                         <Button
                           type="button"
@@ -651,14 +652,8 @@ export function QuizCreateForm({
 
                     <div className="space-y-1.5">
                       {question.options.map((option, optionIndex) => (
-                        <button
+                        <div
                           key={option.id}
-                          type="button"
-                          onClick={() =>
-                            updateOption(section.id, question.id, option.id, {
-                              isCorrect: true,
-                            })
-                          }
                           className={cn(
                             "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
                             option.isCorrect
@@ -666,35 +661,44 @@ export function QuizCreateForm({
                               : "border-transparent hover:bg-muted/50",
                           )}
                         >
-                          <span
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateOption(section.id, question.id, option.id, {
+                                isCorrect: true,
+                              })
+                            }
+                            aria-label={`Mark option ${String.fromCharCode(65 + optionIndex)} as correct`}
                             className={cn(
-                              "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium",
-                              option.isCorrect &&
-                                "border-foreground bg-foreground text-background",
+                              "flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                              option.isCorrect
+                                ? "border-foreground bg-foreground text-background"
+                                : "hover:bg-muted-foreground/10",
                             )}
                           >
                             {String.fromCharCode(65 + optionIndex)}
-                          </span>
-                          <Input
-                            value={option.label}
-                            onChange={(event) =>
-                              updateOption(
-                                section.id,
-                                question.id,
-                                option.id,
-                                { label: event.target.value },
-                              )
-                            }
-                            onClick={(event) => event.stopPropagation()}
-                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                            className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                          />
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <MathSourceField
+                              value={option.label}
+                              onChange={(label) =>
+                                updateOption(
+                                  section.id,
+                                  question.id,
+                                  option.id,
+                                  { label },
+                                )
+                              }
+                              placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                              className="border-0 hover:bg-transparent focus-visible:ring-0"
+                            />
+                          </div>
                           {option.isCorrect ? (
                             <span className="shrink-0 text-xs font-medium text-muted-foreground">
                               Correct
                             </span>
                           ) : null}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </div>
