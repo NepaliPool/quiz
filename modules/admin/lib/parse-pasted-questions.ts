@@ -42,7 +42,12 @@ Q: What is the capital of France?
 A) London
 B) Berlin
 C) Paris *
-D) Madrid`;
+D) Madrid
+
+Math (LaTeX) is supported and rendered for students:
+Q: $(\\int \\frac{dx}{x^2-1})$ is equal to:
+A) $(\\frac{1}{2}\\log|\\frac{x-1}{x+1}|+C)$
+B) $(\\frac{1}{2}\\log|\\frac{x+1}{x-1}|+C)$ *`;
 
 function newId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -57,28 +62,106 @@ function stripCorrectMarker(raw: string) {
 }
 
 /**
- * Clean common math-copy artifacts from ChatGPT / rendered LaTeX pastes.
- * e.g. `764\frac{7}{64}647` → `7/64`, bare `\frac{15}{16}` → `15/16`
- * Preserves newlines so multi-line stems stay intact.
+ * Prepare pasted math for KaTeX rendering.
+ * Keeps LaTeX commands, fixes common ChatGPT/OCR artifacts, and wraps
+ * parenthesized LaTeX (and pure-math lines) in `$...$` delimiters.
  */
 export function normalizeMathPaste(text: string): string {
   let result = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
 
-  // {num}{den}\frac{num}{den}{den}{num}  (digits duplicated around LaTeX)
+  // Digits duplicated around frac (OCR / copy artifact) → real LaTeX
   result = result.replace(
     /(\d+)(\d+)\\frac\{\1\}\{\2\}\2\1/g,
-    "$1/$2",
+    "\\frac{$1}{$2}",
   );
 
-  // Remaining plain LaTeX fractions
-  result = result.replace(/\\frac\{(-?\d+)\}\{(-?\d+)\}/g, "$1/$2");
+  // Shorthand \frac12 → \frac{1}{2}
+  result = result.replace(/\\frac(\d)(\d)/g, "\\frac{$1}{$2}");
+
+  // ChatGPT often uses commas instead of \, before dx
+  result = result.replace(/,(?=dx\b)/gi, "\\,");
+
+  // Normalize \(...\) / \[...\] to $ / $$
+  result = result.replace(/\\\(([\s\S]+?)\\\)/g, (_match, inner: string) => {
+    return `$${inner}$`;
+  });
+  result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_match, inner: string) => {
+    return `$$${inner}$$`;
+  });
 
   return result
     .split("\n")
-    .map((line) => line.replace(/\s{2,}/g, " ").trim())
+    .map((line) => wrapLatexForKatex(line.trim()))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function looksLikeLatex(value: string) {
+  return /\\[a-zA-Z]+/.test(value);
+}
+
+/**
+ * Wrap `(...latex...)` chunks and whole-line math in `$...$`.
+ * Leaves already-delimited math alone.
+ */
+function wrapLatexForKatex(line: string): string {
+  if (!line || line.includes("$")) {
+    return line;
+  }
+
+  if (!looksLikeLatex(line)) {
+    return line.replace(/\s{2,}/g, " ");
+  }
+
+  let result = "";
+  let index = 0;
+  let wrappedAny = false;
+
+  while (index < line.length) {
+    if (line[index] !== "(") {
+      result += line[index];
+      index += 1;
+      continue;
+    }
+
+    let depth = 0;
+    let end = -1;
+    for (let cursor = index; cursor < line.length; cursor += 1) {
+      const char = line[cursor];
+      if (char === "(") depth += 1;
+      if (char === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          end = cursor;
+          break;
+        }
+      }
+    }
+
+    if (end === -1) {
+      result += line.slice(index);
+      break;
+    }
+
+    const inner = line.slice(index + 1, end).trim();
+    if (looksLikeLatex(inner)) {
+      result += `$${inner}$`;
+      wrappedAny = true;
+    } else {
+      result += line.slice(index, end + 1);
+    }
+    index = end + 1;
+  }
+
+  const trimmed = result.replace(/\s{2,}/g, " ").trim();
+
+  // Pure math option/line with no parentheses wrapper
+  if (!wrappedAny && looksLikeLatex(trimmed) && !trimmed.includes("$")) {
+    return `$${trimmed}$`;
+  }
+
+  return trimmed;
 }
 
 /**

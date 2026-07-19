@@ -13,6 +13,7 @@ import {
   updateQuizSet,
   updateQuizSetMeta,
 } from "@/actions/admin/quizzes/update";
+import { MathSourceField } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -894,18 +895,18 @@ export function QuizDetailEditor({
                     <span className="mt-2.5 shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                       Q{questionIndex + 1}
                     </span>
-                    <Textarea
-                      value={question.prompt}
-                      disabled={locked}
-                      onChange={(event) =>
-                        updateQuestion(section.id, question.id, {
-                          prompt: event.target.value,
-                        })
-                      }
-                      rows={3}
-                      className="min-h-18 flex-1 resize-y whitespace-pre-wrap"
-                      placeholder="Question prompt"
-                    />
+                    <div className="min-w-0 flex-1">
+                      <MathSourceField
+                        multiline
+                        rows={3}
+                        value={question.prompt}
+                        disabled={locked}
+                        onChange={(prompt) =>
+                          updateQuestion(section.id, question.id, { prompt })
+                        }
+                        placeholder="Question prompt"
+                      />
+                    </div>
                     {!locked && section.questions.length > 1 ? (
                       <Button
                         type="button"
@@ -953,21 +954,23 @@ export function QuizDetailEditor({
                         >
                           {String.fromCharCode(65 + optionIndex)}
                         </span>
-                        <Input
-                          value={option.label}
-                          disabled={locked}
-                          onChange={(event) =>
-                            updateOption(
-                              section.id,
-                              question.id,
-                              option.id,
-                              { label: event.target.value },
-                            )
-                          }
-                          onClick={(event) => event.stopPropagation()}
-                          placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                          className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                        />
+                        <div className="min-w-0 flex-1">
+                          <MathSourceField
+                            value={option.label}
+                            disabled={locked}
+                            onChange={(label) =>
+                              updateOption(
+                                section.id,
+                                question.id,
+                                option.id,
+                                { label },
+                              )
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                            placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                            className="border-0 hover:bg-transparent focus-visible:ring-0"
+                          />
+                        </div>
                         {option.isCorrect ? (
                           <span className="shrink-0 text-xs font-medium text-muted-foreground">
                             Correct
