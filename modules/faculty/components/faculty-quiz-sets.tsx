@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { PublicQuizSetCard } from "@/dal/public/get-quiz-sets";
@@ -24,10 +24,16 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
           className="group flex min-h-80 flex-col justify-between bg-card p-6 transition-colors hover:bg-accent/40"
         >
           <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start gap-2">
               <span className="border px-2 py-1 font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
-                {set.sections.length} subjects
+                {set.sections.length}{" "}
+                {set.sections.length === 1 ? "subject" : "subjects"}
               </span>
+              {set.isFreeMock ? (
+                <span className="border border-primary/30 bg-primary/10 px-2 py-1 font-mono text-[11px] tracking-wide text-primary uppercase">
+                  Free mock
+                </span>
+              ) : null}
             </div>
 
             <div>
@@ -58,12 +64,24 @@ export function FacultyQuizSets({ quizSets }: { quizSets: PublicQuizSetCard[] })
             </div>
           </div>
 
-          <Button asChild className="mt-6 w-full" variant="outline">
-            <Link href={`/faculty/${set.faculty.slug}/${set.slug}`}>
-              Open set
-              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          </Button>
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+            <Button asChild className="flex-1" variant="outline">
+              <Link href={`/faculty/${set.faculty.slug}/${set.slug}`}>
+                Open set
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </Button>
+            {set.isFreeMock ? (
+              <Button asChild className="flex-1" variant="outline">
+                <Link
+                  href={`/faculty/${set.faculty.slug}/${set.slug}/leaderboard`}
+                >
+                  <Trophy className="size-4" />
+                  Leaderboard
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </article>
       ))}
     </div>

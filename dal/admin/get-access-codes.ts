@@ -9,6 +9,7 @@ import {
   isNull,
   lt,
   or,
+  sql,
   type SQL,
 } from "drizzle-orm";
 
@@ -17,7 +18,12 @@ import { accessCodes, quizAttempts, quizSets } from "@/db/schema";
 import { requireAdminForDal } from "@/dal/admin/require-admin";
 import { ADMIN_PAGE_SIZE } from "@/modules/admin/constants";
 
-export type AccessCodeStatus = "available" | "issued" | "used" | "expired";
+export type AccessCodeStatus =
+  | "available"
+  | "issued"
+  | "used"
+  | "expired"
+  | "revoked";
 
 export type AccessCodeListItem = {
   id: string;
@@ -27,7 +33,10 @@ export type AccessCodeListItem = {
   status: AccessCodeStatus;
   isIssued: boolean;
   isUsed: boolean;
+  isRevoked: boolean;
+  isShared: boolean;
   hasAttempt: boolean;
+  attemptCount: number;
   issuedAt: string | null;
   usedAt: string | null;
   expiresAt: string | null;
@@ -43,12 +52,18 @@ export type AccessCodeListResult = {
 };
 
 function resolveStatus(
+  isRevoked: boolean,
   isUsed: boolean,
   isIssued: boolean,
+  isShared: boolean,
   expiresAt: Date | null,
   now: Date,
 ): AccessCodeStatus {
-  if (isUsed) {
+  if (isRevoked) {
+    return "revoked";
+  }
+
+  if (!isShared && isUsed) {
     return "used";
   }
 
@@ -68,10 +83,7 @@ function toDateString(value: Date | null) {
 }
 
 function notExpiredFilter(now: Date): SQL {
-  return or(
-    isNull(accessCodes.expiresAt),
-    gte(accessCodes.expiresAt, now),
-  )!;
+  return or(isNull(accessCodes.expiresAt), gte(accessCodes.expiresAt, now))!;
 }
 
 export async function getAccessCodes({
@@ -102,11 +114,16 @@ export async function getAccessCodes({
     filters.push(eq(accessCodes.quizSetId, quizSetId));
   }
 
-  if (status === "used") {
-    filters.push(eq(accessCodes.isUsed, true));
+  if (status === "revoked") {
+    filters.push(eq(accessCodes.isRevoked, true));
+  } else if (status === "used") {
+    filters.push(
+      and(eq(accessCodes.isRevoked, false), eq(accessCodes.isUsed, true))!,
+    );
   } else if (status === "available") {
     filters.push(
       and(
+        eq(accessCodes.isRevoked, false),
         eq(accessCodes.isUsed, false),
         eq(accessCodes.isIssued, false),
         notExpiredFilter(now),
@@ -115,6 +132,7 @@ export async function getAccessCodes({
   } else if (status === "issued") {
     filters.push(
       and(
+        eq(accessCodes.isRevoked, false),
         eq(accessCodes.isUsed, false),
         eq(accessCodes.isIssued, true),
         notExpiredFilter(now),
@@ -123,6 +141,7 @@ export async function getAccessCodes({
   } else if (status === "expired") {
     filters.push(
       and(
+        eq(accessCodes.isRevoked, false),
         eq(accessCodes.isUsed, false),
         isNotNull(accessCodes.expiresAt),
         lt(accessCodes.expiresAt, now),
@@ -141,6 +160,11 @@ export async function getAccessCodes({
   const pageCount = Math.max(1, Math.ceil(total / safePageSize));
   const safePage = Math.min(Math.max(1, page), pageCount);
 
+  const attemptCountExpr = sql<number>`(
+    select count(*)::int from ${quizAttempts}
+    where ${quizAttempts.accessCodeId} = ${accessCodes.id}
+  )`;
+
   const rows = await db
     .select({
       id: accessCodes.id,
@@ -149,35 +173,49 @@ export async function getAccessCodes({
       quizSetTitle: quizSets.title,
       isIssued: accessCodes.isIssued,
       isUsed: accessCodes.isUsed,
+      isRevoked: accessCodes.isRevoked,
+      isShared: accessCodes.isShared,
       issuedAt: accessCodes.issuedAt,
       usedAt: accessCodes.usedAt,
       expiresAt: accessCodes.expiresAt,
       createdAt: accessCodes.createdAt,
-      attemptId: quizAttempts.id,
+      attemptCount: attemptCountExpr,
     })
     .from(accessCodes)
     .innerJoin(quizSets, eq(accessCodes.quizSetId, quizSets.id))
-    .leftJoin(quizAttempts, eq(quizAttempts.accessCodeId, accessCodes.id))
     .where(where)
     .orderBy(desc(accessCodes.createdAt), desc(accessCodes.id))
     .limit(safePageSize)
     .offset((safePage - 1) * safePageSize);
 
   return {
-    items: rows.map((row) => ({
-      id: row.id,
-      code: row.code,
-      quizSetId: row.quizSetId,
-      quizSetTitle: row.quizSetTitle,
-      status: resolveStatus(row.isUsed, row.isIssued, row.expiresAt, now),
-      isIssued: row.isIssued,
-      isUsed: row.isUsed,
-      hasAttempt: Boolean(row.attemptId),
-      issuedAt: toDateString(row.issuedAt),
-      usedAt: toDateString(row.usedAt),
-      expiresAt: toDateString(row.expiresAt),
-      createdAt: toDateString(row.createdAt) ?? "",
-    })),
+    items: rows.map((row) => {
+      const attemptCount = Number(row.attemptCount ?? 0);
+      return {
+        id: row.id,
+        code: row.code,
+        quizSetId: row.quizSetId,
+        quizSetTitle: row.quizSetTitle,
+        status: resolveStatus(
+          row.isRevoked,
+          row.isUsed,
+          row.isIssued,
+          row.isShared,
+          row.expiresAt,
+          now,
+        ),
+        isIssued: row.isIssued,
+        isUsed: row.isUsed,
+        isRevoked: row.isRevoked,
+        isShared: row.isShared,
+        hasAttempt: attemptCount > 0,
+        attemptCount,
+        issuedAt: toDateString(row.issuedAt),
+        usedAt: toDateString(row.usedAt),
+        expiresAt: toDateString(row.expiresAt),
+        createdAt: toDateString(row.createdAt) ?? "",
+      };
+    }),
     total,
     page: safePage,
     pageSize: safePageSize,

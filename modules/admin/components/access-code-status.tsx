@@ -7,6 +7,7 @@ export const ACCESS_CODE_STATUS_OPTIONS = [
   { value: "issued", label: "Issued" },
   { value: "used", label: "Used" },
   { value: "expired", label: "Expired" },
+  { value: "revoked", label: "Revoked" },
 ] as const;
 
 const STATUS_STYLES: Record<
@@ -31,6 +32,10 @@ const STATUS_STYLES: Record<
   expired: {
     label: "Expired",
     dot: "bg-amber-500",
+  },
+  revoked: {
+    label: "Revoked",
+    dot: "bg-rose-500",
   },
 };
 

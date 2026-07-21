@@ -17,6 +17,7 @@ const ACCESS_CODE_STATUSES = new Set<AccessCodeStatus>([
   "issued",
   "used",
   "expired",
+  "revoked",
 ]);
 
 function parseAccessCodeStatus(

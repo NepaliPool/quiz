@@ -60,3 +60,40 @@ export function resolveSubjectId(
 export function subjectParamValue(name: string) {
   return slugify(name);
 }
+
+type QuizSetLike = {
+  id: string;
+  slug: string;
+  facultySlug: string;
+};
+
+/** URL value for a quiz set filter: facultySlug/quizSlug */
+export function quizSetParamValue(quizSet: QuizSetLike) {
+  return `${quizSet.facultySlug}/${quizSet.slug}`;
+}
+
+/** Resolve a URL quiz param (faculty/slug, bare slug, or legacy id) to a quiz set id. */
+export function resolveQuizSetId(
+  param: string,
+  quizSets: QuizSetLike[],
+): string {
+  if (!param || param === "all") {
+    return "all";
+  }
+
+  const byComposite = quizSets.find(
+    (quizSet) => quizSetParamValue(quizSet) === param,
+  );
+  if (byComposite) {
+    return byComposite.id;
+  }
+
+  const bySlug = quizSets.filter((quizSet) => quizSet.slug === param);
+  if (bySlug.length === 1) {
+    return bySlug[0]!.id;
+  }
+
+  const byId = quizSets.find((quizSet) => quizSet.id === param);
+  return byId?.id ?? "all";
+}
+

@@ -71,6 +71,7 @@ type EditorState = {
   description: string;
   durationMinutes: string;
   isPublished: boolean;
+  isFreeMock: boolean;
   facultyId: string;
   facultyName: string;
   facultySlug: string;
@@ -142,6 +143,7 @@ function toEditorState(quizSet: AdminQuizSetDetail): EditorState {
     description: quizSet.description ?? "",
     durationMinutes: String(quizSet.durationMinutes),
     isPublished: quizSet.isPublished,
+    isFreeMock: quizSet.isFreeMock,
     facultyId: quizSet.facultyId,
     facultyName: quizSet.facultyName,
     facultySlug: quizSet.facultySlug,
@@ -381,6 +383,7 @@ export function QuizDetailEditor({
           description: quizSet.description,
           durationMinutes: quizSet.durationMinutes,
           isPublished: quizSet.isPublished,
+          isFreeMock: quizSet.isFreeMock,
         });
 
         if (!parsed.success) {
@@ -413,6 +416,7 @@ export function QuizDetailEditor({
         durationMinutes: quizSet.durationMinutes,
         facultyId: quizSet.facultyId,
         isPublished: quizSet.isPublished,
+        isFreeMock: quizSet.isFreeMock,
         sections: quizSet.sections.map((section) => ({
           id: isClientDraftId(section.id, "sec-") ? undefined : section.id,
           subjectId: section.subjectId,
@@ -693,6 +697,26 @@ export function QuizDetailEditor({
                 checked={quizSet.isPublished}
                 disabled={isPublishPending}
                 onCheckedChange={handlePublishToggle}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 border px-3 py-2.5 md:col-span-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="edit-free-mock">Free mock test</Label>
+                <p className="text-xs text-muted-foreground">
+                  Shared expiry code, timed attempt, name + public leaderboard.
+                  After enabling, generate a shared code on the Codes page —
+                  existing one-time codes stay one-time.
+                </p>
+              </div>
+              <Switch
+                id="edit-free-mock"
+                checked={quizSet.isFreeMock}
+                onCheckedChange={(checked) =>
+                  setQuizSet((current) => ({
+                    ...current,
+                    isFreeMock: checked,
+                  }))
+                }
               />
             </div>
           </div>

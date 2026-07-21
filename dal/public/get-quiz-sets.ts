@@ -10,6 +10,7 @@ export type PublicQuizSetCard = {
   slug: string;
   description: string | null;
   durationMinutes: number;
+  isFreeMock: boolean;
   faculty: {
     id: string;
     name: string;
@@ -65,6 +66,7 @@ export async function getPublishedQuizSetsByFacultySlug(
       slug: quizSets.slug,
       description: quizSets.description,
       durationMinutes: quizSets.durationMinutes,
+      isFreeMock: quizSets.isFreeMock,
       facultyId: faculties.id,
       facultyName: faculties.name,
       facultySlug: faculties.slug,
@@ -145,6 +147,7 @@ export async function getPublishedQuizSetsByFacultySlug(
         slug: row.slug,
         description: row.description,
         durationMinutes: row.durationMinutes,
+        isFreeMock: row.isFreeMock,
         faculty: {
           id: row.facultyId,
           name: row.facultyName,

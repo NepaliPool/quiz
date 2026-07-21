@@ -47,6 +47,7 @@ export type PublicQuizSetMeta = {
   slug: string;
   description: string | null;
   durationMinutes: number;
+  isFreeMock: boolean;
   faculty: {
     id: string;
     name: string;
@@ -89,6 +90,7 @@ export async function getPublishedQuizSetByFacultyAndSlug(
       slug: true,
       description: true,
       durationMinutes: true,
+      isFreeMock: true,
     },
     with: {
       sections: {
@@ -138,6 +140,7 @@ export async function getPublishedQuizSetByFacultyAndSlug(
     slug: quizSet.slug,
     description: quizSet.description,
     durationMinutes: quizSet.durationMinutes,
+    isFreeMock: quizSet.isFreeMock,
     faculty,
     sections,
     questionCount: sections.reduce(
@@ -260,18 +263,20 @@ export async function getPublishedQuizSetRouteByAccessCode(code: string) {
 
   const row = await db.query.accessCodes.findFirst({
     where: (table, { eq: equals }) => equals(table.code, normalized),
+    columns: {
+      id: true,
+      code: true,
+      isRevoked: true,
+      isShared: true,
+      expiresAt: true,
+    },
     with: {
-      attempt: {
-        columns: {
-          id: true,
-          status: true,
-        },
-      },
       quizSet: {
         columns: {
           id: true,
           slug: true,
           isPublished: true,
+          isFreeMock: true,
         },
         with: {
           faculty: {
@@ -288,12 +293,42 @@ export async function getPublishedQuizSetRouteByAccessCode(code: string) {
     return null;
   }
 
+  if (row.isRevoked) {
+    return null;
+  }
+
+  const now = new Date();
+  const isShared = row.isShared;
+
+  if (row.quizSet.isFreeMock && !isShared) {
+    return null;
+  }
+
+  if (isShared) {
+    if (!row.expiresAt || row.expiresAt.getTime() < now.getTime()) {
+      return null;
+    }
+  }
+
+  let attemptId: string | null = null;
+  let attemptStatus: "in_progress" | "completed" | null = null;
+
+  if (!isShared) {
+    const attempt = await db.query.quizAttempts.findFirst({
+      where: eq(quizAttempts.accessCodeId, row.id),
+      columns: { id: true, status: true },
+    });
+    attemptId = attempt?.id ?? null;
+    attemptStatus = attempt?.status ?? null;
+  }
+
   return {
     code: row.code,
     quizSetId: row.quizSet.id,
     facultySlug: row.quizSet.faculty.slug,
     quizSetSlug: row.quizSet.slug,
-    attemptId: row.attempt?.id ?? null,
-    attemptStatus: row.attempt?.status ?? null,
+    isFreeMock: row.quizSet.isFreeMock,
+    attemptId,
+    attemptStatus,
   };
 }

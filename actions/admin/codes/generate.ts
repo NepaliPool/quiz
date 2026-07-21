@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import {
@@ -49,6 +49,7 @@ export async function generateAccessCodes(
       id: true,
       slug: true,
       isPublished: true,
+      isFreeMock: true,
       title: true,
     },
   });
@@ -66,11 +67,41 @@ export async function generateAccessCodes(
   }
 
   const expiresAt = parseExpiresAtEndOfDay(parsed.data.expiresAt);
+  const isShared = quizSet.isFreeMock;
+
+  if (isShared && !expiresAt) {
+    return actionFailure("Free mock codes require an expiry date.", {
+      expiresAt: "Set an expiry date for the shared free-mock code.",
+    });
+  }
+
+  if (isShared && parsed.data.quantity !== 1) {
+    return actionFailure("Free mock tests only allow one shared code.", {
+      quantity: "Free mock tests only allow generating 1 shared code.",
+    });
+  }
+
+  // Free mocks always generate exactly one shared code, regardless of client input.
+  const quantity = isShared ? 1 : parsed.data.quantity;
   const prefix = buildAccessCodePrefix(quizSet.slug);
-  const quantity = parsed.data.quantity;
 
   try {
     const createdCount = await db.transaction(async (tx) => {
+      if (isShared) {
+        const existingShared = await tx.query.accessCodes.findFirst({
+          where: and(
+            eq(accessCodes.quizSetId, quizSet.id),
+            eq(accessCodes.isShared, true),
+            eq(accessCodes.isRevoked, false),
+          ),
+          columns: { id: true, code: true },
+        });
+
+        if (existingShared) {
+          throw new Error(`SHARED_CODE_EXISTS:${existingShared.code}`);
+        }
+      }
+
       let remaining = quantity;
       let inserted = 0;
 
@@ -84,6 +115,9 @@ export async function generateAccessCodes(
           issuedAt: null,
           isUsed: false,
           usedAt: null,
+          isRevoked: false,
+          revokedAt: null,
+          isShared,
           expiresAt,
         }));
 
@@ -109,10 +143,26 @@ export async function generateAccessCodes(
 
     return actionSuccess(
       { createdCount },
-      `Generated ${createdCount} code${createdCount === 1 ? "" : "s"} for ${quizSet.title}.`,
+      isShared
+        ? `Generated shared free-mock code for ${quizSet.title}.`
+        : `Generated ${createdCount} code${createdCount === 1 ? "" : "s"} for ${quizSet.title}.`,
     );
   } catch (error) {
     console.error("generateAccessCodes failed:", error);
+
+    if (
+      error instanceof Error &&
+      error.message.startsWith("SHARED_CODE_EXISTS:")
+    ) {
+      const existingCode = error.message.slice("SHARED_CODE_EXISTS:".length);
+      return actionFailure(
+        `This free mock already has an active shared code (${existingCode}). Revoke it before generating another.`,
+        {
+          quizSetId:
+            "Revoke the existing shared code before generating a new one.",
+        },
+      );
+    }
 
     if (
       error instanceof Error &&
@@ -124,6 +174,16 @@ export async function generateAccessCodes(
     }
 
     if (isUniqueViolation(error)) {
+      if (isShared) {
+        return actionFailure(
+          "This free mock already has an active shared code. Revoke it before generating another.",
+          {
+            quizSetId:
+              "Revoke the existing shared code before generating a new one.",
+          },
+        );
+      }
+
       return actionFailure(
         "Code collision occurred while generating. Please try again.",
       );
