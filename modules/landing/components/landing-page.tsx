@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { QuizDeskBrand } from "@/components/brand/quizdesk-brand";
 import { Button } from "@/components/ui/button";
+import { InteractiveHoverButton } from "@/components/ui/interactive-hover-button";
 import {
   LandingAuthNav,
   type LandingUser,
@@ -49,13 +50,16 @@ export function LandingPage({
                 </p>
               </div>
 
-              <div className="landing-rise landing-rise-delay-3">
+              <div className="landing-rise landing-rise-delay-3 flex flex-wrap items-center gap-3">
                 <Button asChild size="lg" className="rounded-none px-8">
                   <Link href="#faculties">
                     Browse faculties
                     <ArrowRight className="size-4" />
                   </Link>
                 </Button>
+                <InteractiveHoverButton href="/mocks" className="h-10 px-6">
+                  Free mock tests
+                </InteractiveHoverButton>
               </div>
             </div>
 
@@ -160,11 +164,17 @@ export function LandingPage({
           <div className="grid grid-cols-2 gap-10">
             <FooterColumn
               title="Product"
-              links={[{ href: "#faculties", label: "Faculties" }]}
+              links={[
+                { href: "#faculties", label: "Faculties" },
+                { href: "/mocks", label: "Free mock tests" },
+              ]}
             />
             <FooterColumn
               title="Access"
-              links={[{ href: "#faculties", label: "Browse faculties" }]}
+              links={[
+                { href: "#faculties", label: "Browse faculties" },
+                { href: "/mocks", label: "Mock leaderboards" },
+              ]}
             />
           </div>
         </div>

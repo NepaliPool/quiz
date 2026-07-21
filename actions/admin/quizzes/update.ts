@@ -13,6 +13,7 @@ import {
 import { getCurrentAdmin } from "@/lib/auth/get-current-admin";
 import { db } from "@/db";
 import {
+  accessCodes,
   options,
   questions,
   quizSections,
@@ -30,6 +31,37 @@ import {
 } from "@/modules/admin/schemas/quiz-set";
 
 const POSITION_PARK = 1_000_000;
+
+async function assertCanDisableFreeMock(
+  quizSetId: string,
+  nextIsFreeMock: boolean,
+  currentlyIsFreeMock: boolean,
+): Promise<Extract<ActionResult, { success: false }> | null> {
+  if (nextIsFreeMock || !currentlyIsFreeMock) {
+    return null;
+  }
+
+  const activeShared = await db.query.accessCodes.findFirst({
+    where: and(
+      eq(accessCodes.quizSetId, quizSetId),
+      eq(accessCodes.isShared, true),
+      eq(accessCodes.isRevoked, false),
+    ),
+    columns: { id: true, code: true },
+  });
+
+  if (!activeShared) {
+    return null;
+  }
+
+  return actionFailure(
+    `Revoke the active shared code (${activeShared.code}) before turning off free mock.`,
+    {
+      isFreeMock:
+        "Revoke the active shared code on the Codes page before disabling free mock.",
+    },
+  );
+}
 
 export type UpdatedQuizSetSection = {
   id: string;
@@ -208,6 +240,15 @@ export async function updateQuizSetMeta(
     return actionFailure("Quiz set not found.");
   }
 
+  const freeMockGuard = await assertCanDisableFreeMock(
+    parsed.data.id,
+    parsed.data.isFreeMock,
+    existing.isFreeMock,
+  );
+  if (freeMockGuard) {
+    return freeMockGuard;
+  }
+
   try {
     await db
       .update(quizSets)
@@ -217,6 +258,7 @@ export async function updateQuizSetMeta(
         description: parsed.data.description || null,
         durationMinutes: parsed.data.durationMinutes,
         isPublished: parsed.data.isPublished,
+        isFreeMock: parsed.data.isFreeMock,
       })
       .where(eq(quizSets.id, parsed.data.id));
   } catch (error) {
@@ -321,6 +363,15 @@ export async function updateQuizSet(
     });
   }
 
+  const freeMockGuard = await assertCanDisableFreeMock(
+    data.id,
+    data.isFreeMock,
+    existing.isFreeMock,
+  );
+  if (freeMockGuard) {
+    return freeMockGuard;
+  }
+
   const hasAttempts = await quizSetHasAttempts(data.id);
 
   if (hasAttempts) {
@@ -331,6 +382,7 @@ export async function updateQuizSet(
       description: data.description,
       durationMinutes: data.durationMinutes,
       isPublished: data.isPublished,
+      isFreeMock: data.isFreeMock,
     });
 
     if (!metaResult.success) {
@@ -374,6 +426,7 @@ export async function updateQuizSet(
           description: data.description || null,
           durationMinutes: data.durationMinutes,
           isPublished: data.isPublished,
+          isFreeMock: data.isFreeMock,
         })
         .where(eq(quizSets.id, data.id));
 

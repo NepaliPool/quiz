@@ -94,6 +94,7 @@ export function QuizCreateForm({
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("120");
   const [isPublished, setIsPublished] = useState(false);
+  const [isFreeMock, setIsFreeMock] = useState(false);
   const [facultyId, setFacultyId] = useState(faculties[0]?.id ?? "");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pendingSectionDelete, setPendingSectionDelete] = useState<{
@@ -205,6 +206,7 @@ export function QuizCreateForm({
       durationMinutes: Number(durationMinutes),
       facultyId,
       isPublished,
+      isFreeMock,
       sections: sections.map((section) => {
         const fullMarks = section.questions.reduce(
           (sum, question) => sum + question.marks,
@@ -435,6 +437,20 @@ export function QuizCreateForm({
               id="quiz-published"
               checked={isPublished}
               onCheckedChange={setIsPublished}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 border px-3 py-2.5 md:col-span-2">
+            <div className="space-y-0.5">
+              <Label htmlFor="quiz-free-mock">Free mock test</Label>
+              <p className="text-xs text-muted-foreground">
+                Shared expiry code, timed attempt, name + public leaderboard.
+                Generate a shared code on the Codes page after creating the quiz.
+              </p>
+            </div>
+            <Switch
+              id="quiz-free-mock"
+              checked={isFreeMock}
+              onCheckedChange={setIsFreeMock}
             />
           </div>
         </div>

@@ -22,6 +22,8 @@ import {
   type SubmitAttemptInput,
 } from "@/modules/quiz/schemas/attempt";
 
+const DEADLINE_GRACE_MS = 30_000;
+
 export type SubmitSectionResult = {
   sectionId: string;
   subjectName: string;
@@ -58,6 +60,15 @@ export async function submitAttempt(
       quizSetId: true,
       status: true,
       maxScore: true,
+      startedAt: true,
+    },
+    with: {
+      quizSet: {
+        columns: {
+          durationMinutes: true,
+          isFreeMock: true,
+        },
+      },
     },
   });
 
@@ -68,6 +79,15 @@ export async function submitAttempt(
   if (attempt.status !== "in_progress") {
     return actionFailure("This attempt has already been submitted.");
   }
+
+  const now = new Date();
+  const deadlineAt = new Date(
+    attempt.startedAt.getTime() + attempt.quizSet.durationMinutes * 60_000,
+  );
+  const pastDeadline = now.getTime() > deadlineAt.getTime() + DEADLINE_GRACE_MS;
+
+  // Server deadline is the only timer authority — ignore client timedOut for auth.
+  const allowPartial = attempt.quizSet.isFreeMock || pastDeadline;
 
   const sections = await db.query.quizSections.findMany({
     where: eq(quizSections.quizSetId, attempt.quizSetId),
@@ -103,32 +123,54 @@ export async function submitAttempt(
     return actionFailure("This quiz set has no questions.");
   }
 
-  const unanswered = questionIds.filter((questionId) => !answers[questionId]);
+  if (!allowPartial) {
+    const unanswered = questionIds.filter((questionId) => !answers[questionId]);
 
-  if (unanswered.length > 0) {
-    return actionFailure(
-      `Answer all questions before submitting (${unanswered.length} left).`,
-    );
+    if (unanswered.length > 0) {
+      return actionFailure(
+        `Answer all questions before submitting (${unanswered.length} left).`,
+      );
+    }
+
+    if (Object.keys(answers).length === 0) {
+      return actionFailure("Submit at least one answer.");
+    }
   }
 
-  const optionIds = [...new Set(Object.values(answers))];
-  const optionRows = await db
-    .select({
-      id: options.id,
-      questionId: options.questionId,
-      isCorrect: options.isCorrect,
-    })
-    .from(options)
-    .innerJoin(questions, eq(options.questionId, questions.id))
-    .innerJoin(quizSections, eq(questions.quizSectionId, quizSections.id))
-    .where(
-      and(
-        inArray(options.id, optionIds),
-        eq(quizSections.quizSetId, attempt.quizSetId),
-      ),
-    );
+  const answeredOptionIds = [
+    ...new Set(
+      questionIds
+        .map((questionId) => answers[questionId])
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
 
-  const optionById = new Map(optionRows.map((row) => [row.id, row]));
+  const optionById = new Map<
+    string,
+    { id: string; questionId: string; isCorrect: boolean }
+  >();
+
+  if (answeredOptionIds.length > 0) {
+    const optionRows = await db
+      .select({
+        id: options.id,
+        questionId: options.questionId,
+        isCorrect: options.isCorrect,
+      })
+      .from(options)
+      .innerJoin(questions, eq(options.questionId, questions.id))
+      .innerJoin(quizSections, eq(questions.quizSectionId, quizSections.id))
+      .where(
+        and(
+          inArray(options.id, answeredOptionIds),
+          eq(quizSections.quizSetId, attempt.quizSetId),
+        ),
+      );
+
+    for (const row of optionRows) {
+      optionById.set(row.id, row);
+    }
+  }
 
   const answerRows: {
     id: string;
@@ -140,6 +182,10 @@ export async function submitAttempt(
 
   for (const questionId of questionIds) {
     const optionId = answers[questionId];
+    if (!optionId) {
+      continue;
+    }
+
     const option = optionById.get(optionId);
 
     if (!option || option.questionId !== questionId) {
@@ -159,7 +205,11 @@ export async function submitAttempt(
     let score = 0;
 
     for (const question of section.questions) {
-      const selected = optionById.get(answers[question.id]);
+      const selectedId = answers[question.id];
+      if (!selectedId) {
+        continue;
+      }
+      const selected = optionById.get(selectedId);
       if (selected?.isCorrect) {
         score += question.marks;
       }
@@ -200,7 +250,9 @@ export async function submitAttempt(
         throw new Error("ATTEMPT_ALREADY_COMPLETED");
       }
 
-      await tx.insert(attemptAnswers).values(answerRows);
+      if (answerRows.length > 0) {
+        await tx.insert(attemptAnswers).values(answerRows);
+      }
     });
   } catch (error) {
     if (

@@ -35,6 +35,7 @@ export type AdminQuizSetDetail = {
   description: string | null;
   durationMinutes: number;
   isPublished: boolean;
+  isFreeMock: boolean;
   facultyId: string;
   facultyName: string;
   facultySlug: string;
@@ -103,6 +104,7 @@ export async function getQuizSetById(
     description: quizSet.description,
     durationMinutes: quizSet.durationMinutes,
     isPublished: quizSet.isPublished,
+    isFreeMock: quizSet.isFreeMock,
     facultyId: quizSet.faculty.id,
     facultyName: quizSet.faculty.name,
     facultySlug: quizSet.faculty.slug,

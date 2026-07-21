@@ -86,6 +86,7 @@ export async function createQuizSet(
         description: data.description || null,
         durationMinutes: data.durationMinutes,
         isPublished: data.isPublished,
+        isFreeMock: data.isFreeMock,
         createdById: admin.adminId,
       });
 

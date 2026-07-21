@@ -81,6 +81,7 @@ export const quizSetMetaSchema = z.object({
     .max(600, "Duration must be at most 600 minutes."),
   facultyId: z.string().min(1, "Select a faculty."),
   isPublished: z.boolean().default(false),
+  isFreeMock: z.boolean().default(false),
 });
 
 export const createQuizSetSchema = quizSetMetaSchema.extend({

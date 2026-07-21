@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getAttemptAnswerSheetByCode } from "@/dal/public/get-attempt-result";
+import {
+  getAttemptAnswerSheetByCode,
+  getAttemptResultSummary,
+} from "@/dal/public/get-attempt-result";
 import { createPageMetadata } from "@/lib/seo";
 import { QuizResultPage } from "@/modules/quiz/components/quiz-result-page";
 
 type QuizResultRouteProps = {
   params: Promise<{ slug: string; quizSetSlug: string }>;
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ code?: string; attemptId?: string }>;
 };
 
 export async function generateMetadata({
@@ -27,26 +30,43 @@ export default async function QuizResultRoute({
   params,
   searchParams,
 }: QuizResultRouteProps) {
-  const [{ slug, quizSetSlug }, { code }] = await Promise.all([
+  const [{ slug, quizSetSlug }, { code, attemptId }] = await Promise.all([
     params,
     searchParams,
   ]);
 
   const accessCode = typeof code === "string" ? code : undefined;
+  const id = typeof attemptId === "string" ? attemptId : undefined;
 
-  if (!accessCode) {
+  if (!accessCode && !id) {
     notFound();
   }
 
-  const sheet = await getAttemptAnswerSheetByCode({
+  // Code proves ownership → full sheet. attemptId alone → score summary only.
+  if (accessCode) {
+    const sheet = await getAttemptAnswerSheetByCode({
+      facultySlug: slug,
+      quizSetSlug,
+      code: accessCode,
+      attemptId: id,
+    });
+
+    if (!sheet) {
+      notFound();
+    }
+
+    return <QuizResultPage summary={sheet} initialSheet={sheet} />;
+  }
+
+  const summary = await getAttemptResultSummary({
     facultySlug: slug,
     quizSetSlug,
-    code: accessCode,
+    attemptId: id!,
   });
 
-  if (!sheet) {
+  if (!summary) {
     notFound();
   }
 
-  return <QuizResultPage summary={sheet} initialSheet={sheet} />;
+  return <QuizResultPage summary={summary} initialSheet={null} />;
 }

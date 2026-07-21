@@ -1,13 +1,11 @@
 "use client";
 
-import {
-  CheckCircle2,
-  Clock3,
-  Trophy,
-} from "lucide-react";
+import { CheckCircle2, Clock3, Trophy } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   type FormEvent,
@@ -26,6 +24,11 @@ import type {
   PublicQuizSetMeta,
 } from "@/dal/public/get-quiz-set";
 import { cn } from "@/lib/utils";
+import {
+  clearMockAttemptCookie,
+  getMockAttemptCookie,
+  setMockAttemptCookie,
+} from "@/lib/mock-attempt-cookie";
 import { PublicPageShell } from "@/modules/public/components/public-page-shell";
 import { ContentLeakGuard } from "@/modules/quiz/components/content-leak-guard";
 import {
@@ -36,28 +39,69 @@ import {
 type Step = "code" | "taking";
 
 const OPTION_LETTERS = ["A", "B", "C", "D"] as const;
+const WARN_20_MS = 20 * 60_000;
+const WARN_5_MS = 5 * 60_000;
 
-function resultHref(quizSet: PublicQuizSetMeta, code: string) {
-  return `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/result?code=${encodeURIComponent(code)}`;
+function resultHref(
+  quizSet: PublicQuizSetMeta,
+  {
+    code,
+    attemptId,
+  }: {
+    code?: string;
+    attemptId?: string;
+  },
+) {
+  const params = new URLSearchParams();
+  if (attemptId) {
+    params.set("attemptId", attemptId);
+  }
+  if (code) {
+    params.set("code", code);
+  }
+  return `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/result?${params.toString()}`;
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export function QuizDetailPage({
   quizSet,
   initialCode,
+  initialName,
 }: {
   quizSet: PublicQuizSetMeta;
   initialCode?: string;
+  initialName?: string;
 }) {
   const router = useRouter();
   const autoStartedRef = useRef(false);
+  const warned20Ref = useRef(false);
+  const warned5Ref = useRef(false);
+  const autoSubmitRef = useRef(false);
   const [step, setStep] = useState<Step>("code");
   const [accessCode, setAccessCode] = useState(initialCode?.toUpperCase() ?? "");
+  const [participantName, setParticipantName] = useState(initialName ?? "");
+  const [nameError, setNameError] = useState<string>();
   const [codeError, setCodeError] = useState<string>();
-  const [isVerifying, setIsVerifying] = useState(Boolean(initialCode));
+  const [isVerifying, setIsVerifying] = useState(
+    Boolean(initialCode && (!quizSet.isFreeMock || initialName?.trim())),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string>();
+  const [deadlineAt, setDeadlineAt] = useState<string>();
+  const [remainingMs, setRemainingMs] = useState<number>();
   const [sections, setSections] = useState<PublicQuizSection[] | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [hasStoredAttempt, setHasStoredAttempt] = useState(false);
 
   const totalMarks = quizSet.totalMarks;
   const totalQuestions = quizSet.questionCount;
@@ -67,39 +111,108 @@ export function QuizDetailPage({
       ? 0
       : Math.round((answeredCount / totalQuestions) * 100);
 
-  async function verifyAndStart(code: string, { silent = false } = {}) {
+  const leaderboardHref = `/faculty/${quizSet.faculty.slug}/${quizSet.slug}/leaderboard`;
+
+  useEffect(() => {
+    if (!quizSet.isFreeMock) {
+      return;
+    }
+    setHasStoredAttempt(Boolean(getMockAttemptCookie(quizSet.id)));
+  }, [quizSet.id, quizSet.isFreeMock]);
+
+  async function verifyAndStart(
+    code: string,
+    name: string,
+    { silent = false, forceNew = false } = {},
+  ) {
+    const resumeAttemptId =
+      !forceNew && quizSet.isFreeMock
+        ? getMockAttemptCookie(quizSet.id)
+        : undefined;
+
     const parsed = startAttemptSchema.safeParse({
       quizSetId: quizSet.id,
       code,
+      participantName: name,
+      resumeAttemptId: resumeAttemptId ?? undefined,
     });
 
     if (!parsed.success) {
-      setCodeError(
-        parsed.error.flatten().fieldErrors.code?.[0] ??
-          parsed.error.issues[0]?.message ??
-          "Enter a valid access code.",
-      );
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      setCodeError(fieldErrors.code?.[0] ?? parsed.error.issues[0]?.message);
+      setNameError(fieldErrors.participantName?.[0]);
+      setIsVerifying(false);
+      return;
+    }
+
+    // New free-mock start needs a name; resume from cookie does not.
+    if (
+      quizSet.isFreeMock &&
+      !resumeAttemptId &&
+      !parsed.data.participantName?.trim()
+    ) {
+      setNameError("Enter your name to start this free mock.");
       setIsVerifying(false);
       return;
     }
 
     setCodeError(undefined);
+    setNameError(undefined);
     setIsVerifying(true);
 
     try {
       const response = await startAttempt(parsed.data);
 
       if (!response.success) {
+        if (resumeAttemptId) {
+          clearMockAttemptCookie(quizSet.id);
+          setHasStoredAttempt(false);
+        }
         setCodeError(response.errors?.code ?? response.message);
+        setNameError(response.errors?.participantName);
         if (!silent) {
           toast.error(response.message);
         }
         return;
       }
 
+      const nameForResult =
+        parsed.data.participantName?.trim() || participantName.trim();
+
       if (response.data.completed) {
+        clearMockAttemptCookie(quizSet.id);
+        setHasStoredAttempt(false);
         toast.success(response.message ?? "Viewing your results.");
-        router.replace(resultHref(quizSet, parsed.data.code));
+        router.replace(
+          resultHref(quizSet, {
+            code: parsed.data.code,
+            attemptId: response.data.attemptId,
+          }),
+        );
+        return;
+      }
+
+      if (response.data.deadlineExpired) {
+        setAccessCode(parsed.data.code);
+        if (nameForResult) {
+          setParticipantName(nameForResult);
+        }
+        if (quizSet.isFreeMock) {
+          setMockAttemptCookie(quizSet.id, response.data.attemptId, {
+            durationMinutes:
+              response.data.durationMinutes ?? quizSet.durationMinutes,
+            deadlineAt: response.data.deadlineAt,
+          });
+        }
+        toast.message(
+          response.message ?? "Time is up. Submitting your answers…",
+        );
+        await finalizeSubmit({
+          attemptId: response.data.attemptId,
+          code: parsed.data.code,
+          timedOut: true,
+          answers: {},
+        });
         return;
       }
 
@@ -111,8 +224,26 @@ export function QuizDetailPage({
 
       setAttemptId(response.data.attemptId);
       setAccessCode(parsed.data.code);
+      if (nameForResult) {
+        setParticipantName(nameForResult);
+      }
+      setDeadlineAt(response.data.deadlineAt);
       setSections(response.data.sections);
+      setAnswers({});
       setStep("taking");
+      warned20Ref.current = false;
+      warned5Ref.current = false;
+      autoSubmitRef.current = false;
+
+      if (quizSet.isFreeMock) {
+        setMockAttemptCookie(quizSet.id, response.data.attemptId, {
+          durationMinutes:
+            response.data.durationMinutes ?? quizSet.durationMinutes,
+          deadlineAt: response.data.deadlineAt,
+        });
+        setHasStoredAttempt(true);
+      }
+
       toast.success(
         response.message ??
           (response.data.resumed
@@ -129,48 +260,45 @@ export function QuizDetailPage({
   }
 
   useEffect(() => {
-    if (!initialCode || autoStartedRef.current) {
+    if (autoStartedRef.current) {
+      return;
+    }
+
+    if (quizSet.isFreeMock) {
+      const cookieId = getMockAttemptCookie(quizSet.id);
+      // Resume with code + cookie (name optional). First start still needs name.
+      if (initialCode && (initialName?.trim() || cookieId)) {
+        autoStartedRef.current = true;
+        setIsVerifying(true);
+        void verifyAndStart(initialCode, initialName ?? "", { silent: true });
+      }
+      return;
+    }
+
+    if (!initialCode) {
       return;
     }
 
     autoStartedRef.current = true;
-    void verifyAndStart(initialCode, { silent: true });
-    // Auto-start once when arriving with ?code=
+    void verifyAndStart(initialCode, "", { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCode]);
+  }, [initialCode, initialName, quizSet.isFreeMock]);
 
-  async function handleVerifyCode(event: FormEvent) {
-    event.preventDefault();
-    await verifyAndStart(accessCode);
-  }
-
-  function selectOption(questionId: string, optionId: string) {
-    if (isSubmitting) return;
-
-    setAnswers((current) => ({
-      ...current,
-      [questionId]: optionId,
-    }));
-  }
-
-  async function handleSubmit() {
-    if (isSubmitting) return;
-
-    if (!attemptId) {
-      toast.error("Start the quiz with a valid access code first.");
-      setStep("code");
-      return;
-    }
-
-    const unanswered = totalQuestions - answeredCount;
-    if (unanswered > 0) {
-      toast.error(`Answer all questions before submitting (${unanswered} left).`);
-      return;
-    }
-
+  async function finalizeSubmit({
+    attemptId: submitAttemptId,
+    code,
+    timedOut,
+    answers: submitAnswers,
+  }: {
+    attemptId: string;
+    code: string;
+    timedOut: boolean;
+    answers: Record<string, string>;
+  }) {
     const parsed = submitAttemptSchema.safeParse({
-      attemptId,
-      answers,
+      attemptId: submitAttemptId,
+      answers: submitAnswers,
+      timedOut,
     });
 
     if (!parsed.success) {
@@ -190,11 +318,111 @@ export function QuizDetailPage({
         return;
       }
 
-      toast.success("Quiz submitted.");
-      router.push(resultHref(quizSet, accessCode.trim().toUpperCase()));
+      toast.success(
+        timedOut
+          ? "Time is up — your answers were submitted."
+          : "Quiz submitted.",
+      );
+      clearMockAttemptCookie(quizSet.id);
+      setHasStoredAttempt(false);
+      router.push(
+        resultHref(quizSet, {
+          code: code.trim().toUpperCase() || undefined,
+          attemptId: submitAttemptId,
+        }),
+      );
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  const submitQuiz = useEffectEvent(async (timedOut: boolean) => {
+    if (isSubmitting || !attemptId) {
+      return;
+    }
+
+    if (!timedOut && !quizSet.isFreeMock) {
+      const unanswered = totalQuestions - answeredCount;
+      if (unanswered > 0) {
+        toast.error(
+          `Answer all questions before submitting (${unanswered} left).`,
+        );
+        return;
+      }
+    }
+
+    await finalizeSubmit({
+      attemptId,
+      code: accessCode,
+      timedOut,
+      answers,
+    });
+  });
+
+  useEffect(() => {
+    if (step !== "taking" || !deadlineAt) {
+      return;
+    }
+
+    const deadline = deadlineAt;
+    // Don't fire warnings for thresholds already passed (short/resumed attempts).
+    const initialRemaining = new Date(deadline).getTime() - Date.now();
+    if (initialRemaining <= WARN_20_MS) {
+      warned20Ref.current = true;
+    }
+    if (initialRemaining <= WARN_5_MS) {
+      warned5Ref.current = true;
+    }
+
+    function tick() {
+      const remaining = new Date(deadline).getTime() - Date.now();
+      const clamped = Math.max(0, remaining);
+
+      setRemainingMs((previous) => {
+        // Avoid re-renders when the displayed second has not changed.
+        if (
+          previous !== undefined &&
+          Math.ceil(previous / 1000) === Math.ceil(clamped / 1000)
+        ) {
+          return previous;
+        }
+        return clamped;
+      });
+
+      if (remaining <= WARN_20_MS && remaining > WARN_5_MS && !warned20Ref.current) {
+        warned20Ref.current = true;
+        toast.warning("20 minutes left on this mock.");
+      }
+
+      if (remaining <= WARN_5_MS && remaining > 0 && !warned5Ref.current) {
+        warned5Ref.current = true;
+        toast.warning("5 minutes left — wrap up soon.");
+      }
+
+      if (remaining <= 0 && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+        void submitQuiz(true);
+      }
+    }
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+    // submitQuiz is an Effect Event — omit from deps (not reactive).
+  }, [step, deadlineAt]);
+
+  async function handleVerifyCode(event: FormEvent) {
+    event.preventDefault();
+    await verifyAndStart(accessCode, participantName);
+  }
+
+  function selectOption(questionId: string, optionId: string) {
+    if (isSubmitting) return;
+
+    setAnswers((current) => ({
+      ...current,
+      [questionId]: optionId,
+    }));
   }
 
   return (
@@ -205,6 +433,7 @@ export function QuizDetailPage({
       <div className="mb-10 space-y-5 border-b pb-8">
         <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
           {quizSet.faculty.name}
+          {quizSet.isFreeMock ? " · Free mock" : ""}
         </p>
 
         <div className="space-y-3">
@@ -243,6 +472,17 @@ export function QuizDetailPage({
             </span>
           ))}
         </div>
+
+        {quizSet.isFreeMock ? (
+          <p className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+            <Link href={leaderboardHref} className="underline underline-offset-4">
+              View leaderboard
+            </Link>
+            <Link href="/mocks" className="underline underline-offset-4">
+              All free mocks
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       {step === "code" && (
@@ -254,14 +494,39 @@ export function QuizDetailPage({
             <h2 className="font-display text-3xl tracking-tight">
               {isVerifying && initialCode
                 ? "Starting your quiz…"
-                : "Enter your one-time code"}
+                : quizSet.isFreeMock
+                  ? "Enter free mock details"
+                  : "Enter your one-time code"}
             </h2>
             <p className="text-sm leading-6 text-muted-foreground">
               {isVerifying && initialCode
                 ? "Validating your access code and opening the quiz set."
-                : "One code unlocks the full faculty set — all subject sections on this page."}
+                : quizSet.isFreeMock
+                  ? "Use the shared mock code and your name. The timer starts when you begin. Refreshing mid-mock keeps the timer but does not restore prior answers."
+                  : "One code unlocks the full faculty set — all subject sections on this page."}
             </p>
           </div>
+
+          {quizSet.isFreeMock && hasStoredAttempt && !isVerifying ? (
+            <div className="mb-5 space-y-2 border bg-muted/40 px-4 py-3 text-sm">
+              <p>
+                This browser has an in-progress attempt. Enter the shared code
+                to continue the timer (answers from before refresh are not
+                restored).
+              </p>
+              <button
+                type="button"
+                className="underline underline-offset-4"
+                onClick={() => {
+                  clearMockAttemptCookie(quizSet.id);
+                  setHasStoredAttempt(false);
+                  toast.message("Cleared saved attempt. Start fresh with your name.");
+                }}
+              >
+                Start a new attempt instead
+              </button>
+            </div>
+          ) : null}
 
           {isVerifying && initialCode ? (
             <div className="space-y-3">
@@ -270,6 +535,26 @@ export function QuizDetailPage({
             </div>
           ) : (
             <form className="space-y-5" onSubmit={handleVerifyCode}>
+              {quizSet.isFreeMock ? (
+                <Field>
+                  <FieldLabel htmlFor="participant-name">Your name</FieldLabel>
+                  <Input
+                    id="participant-name"
+                    value={participantName}
+                    onChange={(event) => {
+                      setNameError(undefined);
+                      setParticipantName(event.target.value);
+                    }}
+                    placeholder="As it should appear on the leaderboard"
+                    className="h-11"
+                    aria-invalid={Boolean(nameError)}
+                    autoComplete="name"
+                    disabled={isVerifying}
+                  />
+                  <FieldError>{nameError}</FieldError>
+                </Field>
+              ) : null}
+
               <Field>
                 <FieldLabel htmlFor="access-code">Access code</FieldLabel>
                 <Input
@@ -289,7 +574,11 @@ export function QuizDetailPage({
               </Field>
 
               <Button type="submit" className="w-full" disabled={isVerifying}>
-                {isVerifying ? "Verifying..." : "Start quiz set"}
+                {isVerifying
+                  ? "Verifying..."
+                  : quizSet.isFreeMock && hasStoredAttempt
+                    ? "Continue attempt"
+                    : "Start quiz set"}
               </Button>
             </form>
           )}
@@ -306,7 +595,20 @@ export function QuizDetailPage({
                 <p className="text-muted-foreground">
                   {answeredCount} of {totalQuestions} answered
                 </p>
-                <p className="font-medium">{progress}%</p>
+                <div className="flex items-center gap-3 font-medium">
+                  {remainingMs !== undefined ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 tabular-nums",
+                        remainingMs <= WARN_5_MS && "text-destructive",
+                      )}
+                    >
+                      <Clock3 className="size-4" />
+                      {formatCountdown(remainingMs)}
+                    </span>
+                  ) : null}
+                  <span>{progress}%</span>
+                </div>
               </div>
               <div className="mt-3 h-2 overflow-hidden border bg-muted">
                 <div
@@ -349,7 +651,7 @@ export function QuizDetailPage({
               <Button
                 type="button"
                 size="lg"
-                onClick={handleSubmit}
+                onClick={() => void submitQuiz(false)}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Submitting..." : "Submit entire set"}
@@ -446,13 +748,7 @@ function SubjectSection({
   );
 }
 
-function MetaChip({
-  icon,
-  label,
-}: {
-  icon: ReactNode;
-  label: string;
-}) {
+function MetaChip({ icon, label }: { icon: ReactNode; label: string }) {
   return (
     <span className="inline-flex items-center gap-2 border px-3 py-1.5">
       {icon}

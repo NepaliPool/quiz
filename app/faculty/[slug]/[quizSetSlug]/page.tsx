@@ -7,7 +7,7 @@ import { QuizDetailPage } from "@/modules/quiz/components/quiz-detail-page";
 
 type QuizSetPageProps = {
   params: Promise<{ slug: string; quizSetSlug: string }>;
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ code?: string; name?: string }>;
 };
 
 export async function generateMetadata({
@@ -40,7 +40,7 @@ export default async function QuizSetPage({
   params,
   searchParams,
 }: QuizSetPageProps) {
-  const [{ slug, quizSetSlug }, { code }] = await Promise.all([
+  const [{ slug, quizSetSlug }, { code, name }] = await Promise.all([
     params,
     searchParams,
   ]);
@@ -54,6 +54,7 @@ export default async function QuizSetPage({
     <QuizDetailPage
       quizSet={quizSet}
       initialCode={typeof code === "string" ? code : undefined}
+      initialName={typeof name === "string" ? name : undefined}
     />
   );
 }

@@ -40,6 +40,7 @@ export async function markAccessCodeIssued(
         code: true,
         isUsed: true,
         isIssued: true,
+        isRevoked: true,
         expiresAt: true,
       },
     });
@@ -50,6 +51,10 @@ export async function markAccessCodeIssued(
 
     if (existing.isUsed) {
       return actionFailure("Used codes cannot be marked as issued.");
+    }
+
+    if (existing.isRevoked) {
+      return actionFailure("Revoked codes cannot be marked as issued.");
     }
 
     if (existing.isIssued) {
@@ -71,6 +76,7 @@ export async function markAccessCodeIssued(
           eq(accessCodes.id, existing.id),
           eq(accessCodes.isUsed, false),
           eq(accessCodes.isIssued, false),
+          eq(accessCodes.isRevoked, false),
         ),
       )
       .returning({ id: accessCodes.id });
@@ -114,6 +120,7 @@ export async function releaseAccessCode(
         code: true,
         isUsed: true,
         isIssued: true,
+        isRevoked: true,
       },
     });
 
@@ -123,6 +130,10 @@ export async function releaseAccessCode(
 
     if (existing.isUsed) {
       return actionFailure("Used codes cannot be released.");
+    }
+
+    if (existing.isRevoked) {
+      return actionFailure("Revoked codes cannot be released.");
     }
 
     if (!existing.isIssued) {
@@ -140,6 +151,7 @@ export async function releaseAccessCode(
           eq(accessCodes.id, existing.id),
           eq(accessCodes.isUsed, false),
           eq(accessCodes.isIssued, true),
+          eq(accessCodes.isRevoked, false),
         ),
       )
       .returning({ id: accessCodes.id });
