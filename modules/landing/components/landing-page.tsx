@@ -167,13 +167,15 @@ export function LandingPage({
               links={[
                 { href: "#faculties", label: "Faculties" },
                 { href: "/mocks", label: "Free mock tests" },
+                { href: "/leaderboard", label: "Leaderboard" },
               ]}
             />
             <FooterColumn
               title="Access"
               links={[
                 { href: "#faculties", label: "Browse faculties" },
-                { href: "/mocks", label: "Mock leaderboards" },
+                { href: "/mocks", label: "Free mock test leaderboards" },
+                { href: "/leaderboard", label: "Stream boards" },
               ]}
             />
           </div>
