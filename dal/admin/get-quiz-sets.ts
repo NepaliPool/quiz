@@ -40,7 +40,9 @@ export type QuizSetOption = {
   id: string;
   title: string;
   slug: string;
+  facultySlug: string;
   isPublished: boolean;
+  isFreeMock: boolean;
 };
 
 export async function getQuizSets({
@@ -210,9 +212,12 @@ export async function getQuizSetOptions({
       id: quizSets.id,
       title: quizSets.title,
       slug: quizSets.slug,
+      facultySlug: faculties.slug,
       isPublished: quizSets.isPublished,
+      isFreeMock: quizSets.isFreeMock,
     })
     .from(quizSets)
+    .innerJoin(faculties, eq(quizSets.facultyId, faculties.id))
     .where(publishedOnly ? eq(quizSets.isPublished, true) : undefined)
     .orderBy(asc(quizSets.title));
 }

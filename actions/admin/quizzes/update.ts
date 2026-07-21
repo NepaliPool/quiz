@@ -217,6 +217,7 @@ export async function updateQuizSetMeta(
         description: parsed.data.description || null,
         durationMinutes: parsed.data.durationMinutes,
         isPublished: parsed.data.isPublished,
+        isFreeMock: parsed.data.isFreeMock,
       })
       .where(eq(quizSets.id, parsed.data.id));
   } catch (error) {
@@ -331,6 +332,7 @@ export async function updateQuizSet(
       description: data.description,
       durationMinutes: data.durationMinutes,
       isPublished: data.isPublished,
+      isFreeMock: data.isFreeMock,
     });
 
     if (!metaResult.success) {
@@ -374,6 +376,7 @@ export async function updateQuizSet(
           description: data.description || null,
           durationMinutes: data.durationMinutes,
           isPublished: data.isPublished,
+          isFreeMock: data.isFreeMock,
         })
         .where(eq(quizSets.id, data.id));
 

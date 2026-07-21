@@ -24,6 +24,7 @@ export type AttemptResultSummary = {
   quizSetSlug: string;
   facultyName: string;
   facultySlug: string;
+  isFreeMock: boolean;
   score: number;
   maxScore: number;
   percentage: number;
@@ -111,6 +112,7 @@ async function getQuizSetContext(facultySlug: string, quizSetSlug: string) {
       id: true,
       title: true,
       slug: true,
+      isFreeMock: true,
     },
   });
 
@@ -217,6 +219,7 @@ function toSummary(
     quizSetSlug: quizSet.slug,
     facultyName: quizSet.faculty.name,
     facultySlug: quizSet.faculty.slug,
+    isFreeMock: quizSet.isFreeMock,
     score: attempt.score,
     maxScore: attempt.maxScore,
     percentage: Math.round((attempt.score / attempt.maxScore) * 100),
@@ -275,64 +278,15 @@ export async function getAttemptResultSummary({
   );
 }
 
-/**
- * Full answer sheet — only after proving the access code for this attempt.
- * Reveals correct options.
- */
-export async function getAttemptAnswerSheetByCode({
-  facultySlug,
-  quizSetSlug,
-  code,
-}: {
-  facultySlug: string;
-  quizSetSlug: string;
-  code: string;
-}): Promise<AttemptAnswerSheet | null> {
-  const quizSet = await getQuizSetContext(facultySlug, quizSetSlug);
-
-  if (!quizSet) {
-    return null;
-  }
-
-  const normalized = code.trim().toUpperCase();
-
-  if (!normalized) {
-    return null;
-  }
-
-  const accessCode = await db.query.accessCodes.findFirst({
-    where: and(
-      eq(accessCodes.code, normalized),
-      eq(accessCodes.quizSetId, quizSet.id),
-    ),
-    with: {
-      attempt: {
-        columns: {
-          id: true,
-          score: true,
-          maxScore: true,
-          completedAt: true,
-          status: true,
-        },
-      },
-    },
-  });
-
-  if (
-    !accessCode?.attempt ||
-    accessCode.attempt.status !== "completed" ||
-    !accessCode.attempt.completedAt
-  ) {
-    return null;
-  }
-
-  const attempt = accessCode.attempt;
-  const completedAt = attempt.completedAt;
-
-  if (!completedAt) {
-    return null;
-  }
-
+async function buildAnswerSheet(
+  quizSet: NonNullable<Awaited<ReturnType<typeof getQuizSetContext>>>,
+  attempt: {
+    id: string;
+    score: number;
+    maxScore: number;
+    completedAt: Date;
+  },
+): Promise<AttemptAnswerSheet> {
   const [sections, answers] = await Promise.all([
     loadSectionsWithOptions(quizSet.id),
     loadAttemptAnswers(attempt.id),
@@ -384,12 +338,7 @@ export async function getAttemptAnswerSheetByCode({
   return {
     ...toSummary(
       quizSet,
-      {
-        id: attempt.id,
-        score: attempt.score,
-        maxScore: attempt.maxScore,
-        completedAt,
-      },
+      attempt,
       sheetSections.map((section) => ({
         sectionId: section.sectionId,
         subjectName: section.subjectName,
@@ -399,6 +348,101 @@ export async function getAttemptAnswerSheetByCode({
     ),
     sections: sheetSections,
   };
+}
+
+/**
+ * Full answer sheet — only after proving the access code for this attempt.
+ * Reveals correct options. Shared codes require attemptId (many runs per code).
+ */
+export async function getAttemptAnswerSheetByCode({
+  facultySlug,
+  quizSetSlug,
+  code,
+  attemptId,
+}: {
+  facultySlug: string;
+  quizSetSlug: string;
+  code: string;
+  attemptId?: string;
+}): Promise<AttemptAnswerSheet | null> {
+  const quizSet = await getQuizSetContext(facultySlug, quizSetSlug);
+
+  if (!quizSet) {
+    return null;
+  }
+
+  const normalized = code.trim().toUpperCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const accessCode = await db.query.accessCodes.findFirst({
+    where: and(
+      eq(accessCodes.code, normalized),
+      eq(accessCodes.quizSetId, quizSet.id),
+    ),
+    columns: {
+      id: true,
+      isRevoked: true,
+      isShared: true,
+    },
+  });
+
+  if (!accessCode || accessCode.isRevoked) {
+    return null;
+  }
+
+  let attempt: {
+    id: string;
+    score: number;
+    maxScore: number;
+    completedAt: Date | null;
+    status: "in_progress" | "completed";
+  } | null = null;
+
+  if (attemptId) {
+    attempt =
+      (await db.query.quizAttempts.findFirst({
+        where: and(
+          eq(quizAttempts.id, attemptId),
+          eq(quizAttempts.accessCodeId, accessCode.id),
+        ),
+        columns: {
+          id: true,
+          score: true,
+          maxScore: true,
+          completedAt: true,
+          status: true,
+        },
+      })) ?? null;
+  } else if (accessCode.isShared) {
+    // Ambiguous without attemptId when many runs share one code.
+    return null;
+  } else {
+    attempt =
+      (await db.query.quizAttempts.findFirst({
+        where: eq(quizAttempts.accessCodeId, accessCode.id),
+        columns: {
+          id: true,
+          score: true,
+          maxScore: true,
+          completedAt: true,
+          status: true,
+        },
+      })) ?? null;
+  }
+
+  if (!attempt || attempt.status !== "completed" || !attempt.completedAt) {
+    return null;
+  }
+
+  return buildAnswerSheet(quizSet, {
+    id: attempt.id,
+    score: attempt.score,
+    maxScore: attempt.maxScore,
+    completedAt: attempt.completedAt,
+  });
 }
 
 /** @deprecated Use getAttemptAnswerSheetByCode */

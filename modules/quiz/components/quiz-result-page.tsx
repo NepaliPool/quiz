@@ -53,6 +53,7 @@ export function QuizResultPage({
       facultySlug: summary.facultySlug,
       quizSetSlug: summary.quizSetSlug,
       code,
+      attemptId: summary.attemptId,
     });
 
     if (!parsed.success) {
@@ -96,6 +97,19 @@ export function QuizResultPage({
           {summary.quizSetTitle}
         </h1>
         <p className="text-sm text-muted-foreground">Submitted {completedDate}</p>
+        {summary.isFreeMock ? (
+          <div className="flex flex-wrap gap-4 text-sm">
+            <Link
+              href={`/faculty/${summary.facultySlug}/${summary.quizSetSlug}/leaderboard`}
+              className="underline underline-offset-4"
+            >
+              View leaderboard
+            </Link>
+            <Link href="/mocks" className="underline underline-offset-4">
+              All free mocks
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <section className="mb-10 space-y-6 border bg-card p-6 md:p-8">
@@ -105,7 +119,9 @@ export function QuizResultPage({
           </div>
           <h2 className="font-display text-3xl tracking-tight">Set complete</h2>
           <p className="text-sm leading-6 text-muted-foreground">
-            Your score is saved against your access code.
+            {summary.isFreeMock
+              ? "Your score is on the public leaderboard."
+              : "Your score is saved against your access code."}
             {!sheet
               ? " Enter that same code to unlock your full answer sheet."
               : " Review every question below."}
@@ -148,8 +164,9 @@ export function QuizResultPage({
               Enter your access code
             </h2>
             <p className="text-sm leading-6 text-muted-foreground">
-              Use the same one-time code you used to take this quiz to view which
-              answers were right or wrong.
+              {summary.isFreeMock
+                ? "Enter the shared free-mock code you used to take this set to view which answers were right or wrong."
+                : "Use the same one-time code you used to take this quiz to view which answers were right or wrong."}
             </p>
           </div>
 
@@ -189,7 +206,15 @@ export function QuizResultPage({
           <Link href="/">Back home</Link>
         </Button>
         <Button asChild className="flex-1">
-          <Link href={`/faculty/${summary.facultySlug}`}>More quiz sets</Link>
+          <Link
+            href={
+              summary.isFreeMock
+                ? `/faculty/${summary.facultySlug}/${summary.quizSetSlug}`
+                : `/faculty/${summary.facultySlug}`
+            }
+          >
+            {summary.isFreeMock ? "Take again" : "More quiz sets"}
+          </Link>
         </Button>
       </div>
     </PublicPageShell>

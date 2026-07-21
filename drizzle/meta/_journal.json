@@ -29,6 +29,13 @@
       "when": 1784272000000,
       "tag": "0003_access_code_issued",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784640539184,
+      "tag": "0004_clumsy_ego",
+      "breakpoints": true
     }
   ]
 }

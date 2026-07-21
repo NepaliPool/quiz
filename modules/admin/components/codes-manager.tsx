@@ -12,6 +12,10 @@ import {
   releaseAccessCode,
 } from "@/actions/admin/codes/issue";
 import {
+  revokeAccessCode,
+  unrevokeAccessCode,
+} from "@/actions/admin/codes/revoke";
+import {
   ACCESS_CODE_STATUS_OPTIONS,
   AccessCodeStatusLabel,
 } from "@/modules/admin/components/access-code-status";
@@ -60,6 +64,10 @@ import { adminKeys } from "@/modules/admin/hooks/queries/keys";
 import { useAccessCodesQuery } from "@/modules/admin/hooks/queries/use-access-codes";
 import { useAdminListParams } from "@/modules/admin/hooks/use-admin-list-params";
 import {
+  quizSetParamValue,
+  resolveQuizSetId,
+} from "@/modules/admin/lib/resolve-list-filter";
+import {
   generateAccessCodesSchema,
   type GenerateAccessCodesInput,
 } from "@/modules/admin/schemas/access-code";
@@ -86,10 +94,11 @@ export function CodesManager({
   >(null);
   const statusFilter = list.getParam("status");
   const quizFilter = list.getParam("quiz");
+  const quizSetId = resolveQuizSetId(quizFilter, quizOptions);
   const filters = {
     q: list.committedQuery,
     status: statusFilter,
-    quizSetId: quizFilter,
+    quizSetId,
     page: list.page,
   };
   const { data, isPending, isFetching, isError, error } =
@@ -105,7 +114,11 @@ export function CodesManager({
   const [issuedOverrides, setIssuedOverrides] = useState<
     Record<string, boolean>
   >({});
+  const [revokedOverrides, setRevokedOverrides] = useState<
+    Record<string, boolean>
+  >({});
   const [togglingIds, setTogglingIds] = useState<Record<string, true>>({});
+  const [revokingIds, setRevokingIds] = useState<Record<string, true>>({});
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -142,6 +155,24 @@ export function CodesManager({
 
       return changed ? next : current;
     });
+
+    setRevokedOverrides((current) => {
+      if (Object.keys(current).length === 0) {
+        return current;
+      }
+
+      const next = { ...current };
+      let changed = false;
+
+      for (const code of data.items) {
+        if (code.id in next && next[code.id] === code.isRevoked) {
+          delete next[code.id];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
   }, [data]);
 
   const showPagination = data ? data.total > data.pageSize : false;
@@ -159,10 +190,16 @@ export function CodesManager({
     });
   }
 
+  const selectedQuiz = publishedQuizOptions.find(
+    (set) => set.id === form.quizSetId,
+  );
+  const selectedIsFreeMock = Boolean(selectedQuiz?.isFreeMock);
+
   function openCreate() {
+    const first = publishedQuizOptions[0];
     setForm({
-      quizSetId: publishedQuizOptions[0]?.id ?? "",
-      quantity: "10",
+      quizSetId: first?.id ?? "",
+      quantity: first?.isFreeMock ? "1" : "10",
       expiresAt: "",
     });
     setFieldErrors({});
@@ -172,7 +209,7 @@ export function CodesManager({
   function handleSave() {
     const parsed = generateAccessCodesSchema.safeParse({
       quizSetId: form.quizSetId,
-      quantity: form.quantity,
+      quantity: selectedIsFreeMock ? "1" : form.quantity,
       expiresAt: form.expiresAt,
     });
 
@@ -301,14 +338,84 @@ export function CodesManager({
     return issuedOverrides[code.id] ?? code.isIssued;
   }
 
+  function resolveRevoked(code: AccessCodeListResult["items"][number]) {
+    return revokedOverrides[code.id] ?? code.isRevoked;
+  }
+
   function resolveStatus(
     code: AccessCodeListResult["items"][number],
   ): AccessCodeStatus {
+    if (resolveRevoked(code)) {
+      return "revoked";
+    }
+
     if (code.status === "used" || code.status === "expired") {
       return code.status;
     }
 
     return resolveIssued(code) ? "issued" : "available";
+  }
+
+  function handleRevokeToggle(
+    code: AccessCodeListResult["items"][number],
+    nextRevoked: boolean,
+  ) {
+    const previousRevoked = resolveRevoked(code);
+
+    if (previousRevoked === nextRevoked || revokingIds[code.id]) {
+      return;
+    }
+
+    setRevokedOverrides((current) => ({
+      ...current,
+      [code.id]: nextRevoked,
+    }));
+    setRevokingIds((current) => ({ ...current, [code.id]: true }));
+
+    void (async () => {
+      try {
+        const result = nextRevoked
+          ? await revokeAccessCode({ id: code.id })
+          : await unrevokeAccessCode({ id: code.id });
+
+        if (!result.success) {
+          setRevokedOverrides((current) => {
+            const next = { ...current };
+            if (previousRevoked === code.isRevoked) {
+              delete next[code.id];
+            } else {
+              next[code.id] = previousRevoked;
+            }
+            return next;
+          });
+          toast.error(result.message);
+          return;
+        }
+
+        toast.success(
+          result.message ??
+            (nextRevoked ? "Code revoked." : "Code restored."),
+        );
+        await invalidateCodes();
+      } catch {
+        setRevokedOverrides((current) => {
+          const next = { ...current };
+          if (previousRevoked === code.isRevoked) {
+            delete next[code.id];
+          } else {
+            next[code.id] = previousRevoked;
+          }
+          return next;
+        });
+        toast.error("Could not update this code. Please try again.");
+      } finally {
+        setRevokingIds((current) => {
+          const next = { ...current };
+          delete next[code.id];
+          return next;
+        });
+      }
+    })();
   }
 
   return (
@@ -345,7 +452,16 @@ export function CodesManager({
                 </SelectContent>
               </Select>
               <Select
-                value={quizFilter}
+                value={
+                  quizSetId === "all"
+                    ? "all"
+                    : (() => {
+                        const match = quizOptions.find(
+                          (set) => set.id === quizSetId,
+                        );
+                        return match ? quizSetParamValue(match) : "all";
+                      })()
+                }
                 onValueChange={(value) => list.setParam("quiz", value)}
               >
                 <SelectTrigger className="w-full sm:w-56">
@@ -354,7 +470,7 @@ export function CodesManager({
                 <SelectContent>
                   <SelectItem value="all">All quiz sets</SelectItem>
                   {quizOptions.map((set) => (
-                    <SelectItem key={set.id} value={set.id}>
+                    <SelectItem key={set.id} value={quizSetParamValue(set)}>
                       {set.title}
                     </SelectItem>
                   ))}
@@ -374,7 +490,7 @@ export function CodesManager({
         />
 
         {isPending && !data ? (
-          <AdminTableSkeleton columns={7} />
+          <AdminTableSkeleton columns={8} />
         ) : isError ? (
           <AdminEmptyState
             title="Couldn’t load codes"
@@ -400,6 +516,7 @@ export function CodesManager({
                       <TableHead>Quiz set</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Issued</TableHead>
+                      <TableHead>Revoked</TableHead>
                       <TableHead>Expires</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="w-20 text-right">Actions</TableHead>
@@ -408,9 +525,18 @@ export function CodesManager({
                   <TableBody>
                     {data.items.map((code) => {
                       const isIssued = resolveIssued(code);
+                      const isRevoked = resolveRevoked(code);
                       const status = resolveStatus(code);
                       const canToggleIssued =
-                        status === "available" || status === "issued";
+                        !isRevoked &&
+                        (status === "available" || status === "issued");
+                      // One-time: copy while available (before handoff).
+                      // Free mock (shared): copy while available or issued.
+                      // Never copy used or revoked codes.
+                      const canCopy =
+                        !isRevoked &&
+                        !code.isUsed &&
+                        (code.isShared || !isIssued);
 
                       return (
                         <TableRow key={code.id}>
@@ -419,34 +545,44 @@ export function CodesManager({
                               <span className="font-mono font-medium">
                                 {code.code}
                               </span>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-                                aria-label={
-                                  copiedCodeId === code.id
-                                    ? `${code.code} copied`
-                                    : `Copy ${code.code}`
-                                }
-                                title={
-                                  copiedCodeId === code.id
-                                    ? "Copied"
-                                    : "Copy code"
-                                }
-                                onClick={() => handleCopyCode(code)}
-                              >
-                                {copiedCodeId === code.id ? (
-                                  <Check className="size-3.5 text-foreground" />
-                                ) : (
-                                  <Copy className="size-3.5" />
-                                )}
-                              </Button>
+                              {canCopy ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                  aria-label={
+                                    copiedCodeId === code.id
+                                      ? `${code.code} copied`
+                                      : `Copy ${code.code}`
+                                  }
+                                  title={
+                                    copiedCodeId === code.id
+                                      ? "Copied"
+                                      : "Copy code"
+                                  }
+                                  onClick={() => handleCopyCode(code)}
+                                >
+                                  {copiedCodeId === code.id ? (
+                                    <Check className="size-3.5 text-foreground" />
+                                  ) : (
+                                    <Copy className="size-3.5" />
+                                  )}
+                                </Button>
+                              ) : null}
                             </div>
                           </TableCell>
                           <TableCell>{code.quizSetTitle}</TableCell>
                           <TableCell>
-                            <AccessCodeStatusLabel status={status} />
+                            <div className="space-y-1">
+                              <AccessCodeStatusLabel status={status} />
+                              {code.isShared ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Shared · {code.attemptCount} attempt
+                                  {code.attemptCount === 1 ? "" : "s"}
+                                </p>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Switch
@@ -461,6 +597,26 @@ export function CodesManager({
                               }
                               onCheckedChange={(checked) =>
                                 handleIssuedToggle(code, checked)
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={isRevoked}
+                              disabled={Boolean(revokingIds[code.id])}
+                              className="data-[state=checked]:bg-destructive dark:data-[state=checked]:bg-destructive"
+                              aria-label={
+                                isRevoked
+                                  ? `Restore ${code.code}`
+                                  : `Revoke ${code.code}`
+                              }
+                              title={
+                                isRevoked
+                                  ? "Restore this code"
+                                  : "Revoke this code — students cannot use it"
+                              }
+                              onCheckedChange={(checked) =>
+                                handleRevokeToggle(code, checked)
                               }
                             />
                           </TableCell>
@@ -534,9 +690,16 @@ export function CodesManager({
               <Label>Quiz set</Label>
               <Select
                 value={form.quizSetId}
-                onValueChange={(value) =>
-                  setForm((current) => ({ ...current, quizSetId: value }))
-                }
+                onValueChange={(value) => {
+                  const next = publishedQuizOptions.find(
+                    (set) => set.id === value,
+                  );
+                  setForm((current) => ({
+                    ...current,
+                    quizSetId: value,
+                    quantity: next?.isFreeMock ? "1" : current.quantity,
+                  }));
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select quiz set" />
@@ -545,6 +708,7 @@ export function CodesManager({
                   {publishedQuizOptions.map((set) => (
                     <SelectItem key={set.id} value={set.id}>
                       {set.title}
+                      {set.isFreeMock ? " (free mock)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -561,8 +725,9 @@ export function CodesManager({
                 id="code-quantity"
                 type="number"
                 min={1}
-                max={500}
-                value={form.quantity}
+                max={selectedIsFreeMock ? 1 : 500}
+                value={selectedIsFreeMock ? "1" : form.quantity}
+                disabled={selectedIsFreeMock}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -577,12 +742,16 @@ export function CodesManager({
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Between 1 and 500. Each code unlocks one attempt.
+                  {selectedIsFreeMock
+                    ? "Free mocks use one shared code for all students."
+                    : "Between 1 and 500. Each code unlocks one attempt."}
                 </p>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="expires-at">Expires at (optional)</Label>
+              <Label htmlFor="expires-at">
+                Expires at{selectedIsFreeMock ? "" : " (optional)"}
+              </Label>
               <Input
                 id="expires-at"
                 type="date"
@@ -600,7 +769,9 @@ export function CodesManager({
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Expires at the end of that day (UTC).
+                  {selectedIsFreeMock
+                    ? "Required. The shared code stops working after this date (end of UTC day)."
+                    : "Expires at the end of that day (UTC)."}
                 </p>
               )}
             </div>
@@ -611,7 +782,9 @@ export function CodesManager({
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={isMutating}>
-              Generate {form.quantity || "…"} codes
+              {Number(form.quantity) === 1
+                ? "Generate 1 code"
+                : `Generate ${form.quantity || "…"} codes`}
             </Button>
           </SheetFooter>
         </SheetContent>

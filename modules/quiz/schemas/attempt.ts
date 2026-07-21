@@ -7,17 +7,23 @@ export const startAttemptSchema = z.object({
     .trim()
     .min(4, "Access code looks too short.")
     .transform((value) => value.toUpperCase()),
+  participantName: z
+    .string()
+    .trim()
+    .max(80, "Name must be at most 80 characters.")
+    .optional()
+    .or(z.literal("")),
+  /** Browser cookie resume for free mocks (in-progress attempt). */
+  resumeAttemptId: z.string().min(1).optional(),
 });
 
 export type StartAttemptInput = z.infer<typeof startAttemptSchema>;
 
 export const submitAttemptSchema = z.object({
   attemptId: z.string().min(1, "Attempt is required."),
-  answers: z
-    .record(z.string().min(1), z.string().min(1))
-    .refine((value) => Object.keys(value).length > 0, {
-      message: "Submit at least one answer.",
-    }),
+  answers: z.record(z.string().min(1), z.string().min(1)).default({}),
+  /** Client auto-submit when the timer hits zero. */
+  timedOut: z.boolean().optional(),
 });
 
 export type SubmitAttemptInput = z.infer<typeof submitAttemptSchema>;
@@ -40,6 +46,7 @@ export const unlockAnswerSheetSchema = z.object({
     .trim()
     .min(4, "Access code looks too short.")
     .transform((value) => value.toUpperCase()),
+  attemptId: z.string().min(1).optional(),
 });
 
 export type UnlockAnswerSheetInput = z.infer<typeof unlockAnswerSheetSchema>;

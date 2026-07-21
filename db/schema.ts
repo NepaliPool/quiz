@@ -173,6 +173,8 @@ export const quizSets = pgTable(
     description: text("description"),
     durationMinutes: integer("duration_minutes").default(120).notNull(),
     isPublished: boolean("is_published").default(false).notNull(),
+    /** Free mock: shared code, timer, public leaderboard. */
+    isFreeMock: boolean("is_free_mock").default(false).notNull(),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -287,7 +289,9 @@ export const options = pgTable(
 );
 
 /**
- * Admin-issued one-time access codes for an entire quiz set.
+ * Admin-issued access codes for a quiz set.
+ * One-time codes (isShared=false): single attempt, marked used on start.
+ * Shared free-mock codes (isShared=true): many named attempts until expiresAt.
  */
 export const accessCodes = pgTable(
   "access_codes",
@@ -303,6 +307,11 @@ export const accessCodes = pgTable(
     isUsed: boolean("is_used").default(false).notNull(),
     usedAt: timestamp("used_at"),
     expiresAt: timestamp("expires_at"),
+    /** Soft-disable without deleting attempts. */
+    isRevoked: boolean("is_revoked").default(false).notNull(),
+    revokedAt: timestamp("revoked_at"),
+    /** Shared free-mock code: many attempts until expiry. */
+    isShared: boolean("is_shared").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -319,10 +328,18 @@ export const accessCodes = pgTable(
       "access_codes_issued_consistency",
       sql`(${table.isIssued} = false AND ${table.issuedAt} IS NULL) OR (${table.isIssued} = true AND ${table.issuedAt} IS NOT NULL)`,
     ),
+    check(
+      "access_codes_revoked_consistency",
+      sql`(${table.isRevoked} = false AND ${table.revokedAt} IS NULL) OR (${table.isRevoked} = true AND ${table.revokedAt} IS NOT NULL)`,
+    ),
+    check(
+      "access_codes_shared_requires_expiry",
+      sql`${table.isShared} = false OR ${table.expiresAt} IS NOT NULL`,
+    ),
   ],
 );
 
-/** One participation session per access code for a whole set. */
+/** Participation session for a quiz set (one-time or named free-mock attempt). */
 export const quizAttempts = pgTable(
   "quiz_attempts",
   {
@@ -334,6 +351,10 @@ export const quizAttempts = pgTable(
       .notNull()
       .references(() => accessCodes.id, { onDelete: "restrict" }),
     status: quizAttemptStatusEnum("status").default("in_progress").notNull(),
+    /** Display name for free-mock leaderboard (shared codes). */
+    participantName: text("participant_name"),
+    /** Normalized display name key (shared codes; same names allowed across attempts). */
+    participantNameKey: text("participant_name_key"),
     /** Total marks scored across all subject sections. */
     score: integer("score").default(0).notNull(),
     /** Snapshot of total full marks (sum of sections) at submit time. */
@@ -342,7 +363,12 @@ export const quizAttempts = pgTable(
     completedAt: timestamp("completed_at"),
   },
   (table) => [
-    unique("quiz_attempts_access_code_id_uid").on(table.accessCodeId),
+    // One-time codes: at most one attempt per code (no participant name).
+    uniqueIndex("quiz_attempts_one_time_access_code_uid")
+      .on(table.accessCodeId)
+      .where(sql`${table.participantNameKey} IS NULL`),
+    // Shared / free-mock: many attempts per code (resume via browser cookie).
+    index("quiz_attempts_access_code_id_idx").on(table.accessCodeId),
     index("quiz_attempts_quiz_set_id_idx").on(table.quizSetId),
     index("quiz_attempts_quiz_set_id_status_idx").on(
       table.quizSetId,
@@ -357,6 +383,10 @@ export const quizAttempts = pgTable(
     check(
       "quiz_attempts_completed_consistency",
       sql`(${table.status} = 'in_progress' AND ${table.completedAt} IS NULL) OR (${table.status} = 'completed' AND ${table.completedAt} IS NOT NULL)`,
+    ),
+    check(
+      "quiz_attempts_participant_name_consistency",
+      sql`(${table.participantName} IS NULL AND ${table.participantNameKey} IS NULL) OR (${table.participantName} IS NOT NULL AND ${table.participantNameKey} IS NOT NULL)`,
     ),
   ],
 );
@@ -468,15 +498,12 @@ export const optionsRelations = relations(options, ({ one, many }) => ({
   attemptAnswers: many(attemptAnswers),
 }));
 
-export const accessCodesRelations = relations(accessCodes, ({ one }) => ({
+export const accessCodesRelations = relations(accessCodes, ({ one, many }) => ({
   quizSet: one(quizSets, {
     fields: [accessCodes.quizSetId],
     references: [quizSets.id],
   }),
-  attempt: one(quizAttempts, {
-    fields: [accessCodes.id],
-    references: [quizAttempts.accessCodeId],
-  }),
+  attempts: many(quizAttempts),
 }));
 
 export const quizAttemptsRelations = relations(
