@@ -320,6 +320,10 @@ export const accessCodes = pgTable(
     index("access_codes_quiz_set_id_unused_idx")
       .on(table.quizSetId)
       .where(sql`${table.isUsed} = false`),
+    /** At most one active (non-revoked) shared code per quiz set. */
+    uniqueIndex("access_codes_one_active_shared_per_quiz_uid")
+      .on(table.quizSetId)
+      .where(sql`${table.isShared} = true AND ${table.isRevoked} = false`),
     check(
       "access_codes_used_consistency",
       sql`(${table.isUsed} = false AND ${table.usedAt} IS NULL) OR (${table.isUsed} = true AND ${table.usedAt} IS NOT NULL)`,

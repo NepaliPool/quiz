@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "access_codes_one_active_shared_per_quiz_uid" ON "access_codes" USING btree ("quiz_set_id") WHERE "access_codes"."is_shared" = true AND "access_codes"."is_revoked" = false;

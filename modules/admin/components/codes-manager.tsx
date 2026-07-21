@@ -532,10 +532,11 @@ export function CodesManager({
                         (status === "available" || status === "issued");
                       // One-time: copy while available (before handoff).
                       // Free mock (shared): copy while available or issued.
-                      // Never copy used or revoked codes.
+                      // Never copy used, revoked, or expired codes.
                       const canCopy =
                         !isRevoked &&
                         !code.isUsed &&
+                        status !== "expired" &&
                         (code.isShared || !isIssued);
 
                       return (

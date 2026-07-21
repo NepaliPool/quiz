@@ -81,33 +81,27 @@ export async function generateAccessCodes(
     });
   }
 
-  if (isShared) {
-    const existingShared = await db.query.accessCodes.findFirst({
-      where: and(
-        eq(accessCodes.quizSetId, quizSet.id),
-        eq(accessCodes.isShared, true),
-        eq(accessCodes.isRevoked, false),
-      ),
-      columns: { id: true, code: true },
-    });
-
-    if (existingShared) {
-      return actionFailure(
-        `This free mock already has an active shared code (${existingShared.code}). Revoke it before generating another.`,
-        {
-          quizSetId:
-            "Revoke the existing shared code before generating a new one.",
-        },
-      );
-    }
-  }
-
   // Free mocks always generate exactly one shared code, regardless of client input.
   const quantity = isShared ? 1 : parsed.data.quantity;
   const prefix = buildAccessCodePrefix(quizSet.slug);
 
   try {
     const createdCount = await db.transaction(async (tx) => {
+      if (isShared) {
+        const existingShared = await tx.query.accessCodes.findFirst({
+          where: and(
+            eq(accessCodes.quizSetId, quizSet.id),
+            eq(accessCodes.isShared, true),
+            eq(accessCodes.isRevoked, false),
+          ),
+          columns: { id: true, code: true },
+        });
+
+        if (existingShared) {
+          throw new Error(`SHARED_CODE_EXISTS:${existingShared.code}`);
+        }
+      }
+
       let remaining = quantity;
       let inserted = 0;
 
@@ -158,6 +152,20 @@ export async function generateAccessCodes(
 
     if (
       error instanceof Error &&
+      error.message.startsWith("SHARED_CODE_EXISTS:")
+    ) {
+      const existingCode = error.message.slice("SHARED_CODE_EXISTS:".length);
+      return actionFailure(
+        `This free mock already has an active shared code (${existingCode}). Revoke it before generating another.`,
+        {
+          quizSetId:
+            "Revoke the existing shared code before generating a new one.",
+        },
+      );
+    }
+
+    if (
+      error instanceof Error &&
       error.message === "CODE_GENERATION_RETRY_EXHAUSTED"
     ) {
       return actionFailure(
@@ -166,6 +174,16 @@ export async function generateAccessCodes(
     }
 
     if (isUniqueViolation(error)) {
+      if (isShared) {
+        return actionFailure(
+          "This free mock already has an active shared code. Revoke it before generating another.",
+          {
+            quizSetId:
+              "Revoke the existing shared code before generating a new one.",
+          },
+        );
+      }
+
       return actionFailure(
         "Code collision occurred while generating. Please try again.",
       );

@@ -92,15 +92,9 @@ export function QuizDetailPage({
   const [participantName, setParticipantName] = useState(initialName ?? "");
   const [nameError, setNameError] = useState<string>();
   const [codeError, setCodeError] = useState<string>();
-  const [isVerifying, setIsVerifying] = useState(() => {
-    if (!initialCode) {
-      return false;
-    }
-    if (!quizSet.isFreeMock) {
-      return true;
-    }
-    return Boolean(initialName?.trim() || getMockAttemptCookie(quizSet.id));
-  });
+  const [isVerifying, setIsVerifying] = useState(
+    Boolean(initialCode && (!quizSet.isFreeMock || initialName?.trim())),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptId, setAttemptId] = useState<string>();
   const [deadlineAt, setDeadlineAt] = useState<string>();
@@ -275,6 +269,7 @@ export function QuizDetailPage({
       // Resume with code + cookie (name optional). First start still needs name.
       if (initialCode && (initialName?.trim() || cookieId)) {
         autoStartedRef.current = true;
+        setIsVerifying(true);
         void verifyAndStart(initialCode, initialName ?? "", { silent: true });
       }
       return;
@@ -370,6 +365,14 @@ export function QuizDetailPage({
     }
 
     const deadline = deadlineAt;
+    // Don't fire warnings for thresholds already passed (short/resumed attempts).
+    const initialRemaining = new Date(deadline).getTime() - Date.now();
+    if (initialRemaining <= WARN_20_MS) {
+      warned20Ref.current = true;
+    }
+    if (initialRemaining <= WARN_5_MS) {
+      warned5Ref.current = true;
+    }
 
     function tick() {
       const remaining = new Date(deadline).getTime() - Date.now();
