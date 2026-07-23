@@ -124,8 +124,17 @@ export const setQuizSetPublishedSchema = z.object({
   isPublished: z.boolean(),
 });
 
+export const cloneQuizSetAsFreeMockSchema = z.object({
+  sourceId: z.string().min(1, "Quiz set id is required."),
+  title: quizSetMetaSchema.shape.title,
+  slug: quizSetMetaSchema.shape.slug,
+});
+
 export type CreateQuizSetInput = z.infer<typeof createQuizSetSchema>;
 export type UpdateQuizSetInput = z.infer<typeof updateQuizSetSchema>;
 export type UpdateQuizSetMetaInput = z.infer<typeof updateQuizSetMetaSchema>;
 export type DeleteQuizSetInput = z.infer<typeof deleteQuizSetSchema>;
 export type SetQuizSetPublishedInput = z.infer<typeof setQuizSetPublishedSchema>;
+export type CloneQuizSetAsFreeMockInput = z.infer<
+  typeof cloneQuizSetAsFreeMockSchema
+>;

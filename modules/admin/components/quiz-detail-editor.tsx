@@ -8,6 +8,7 @@ import { ArrowLeft, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteQuizSet } from "@/actions/admin/quizzes/delete";
+import { cloneQuizSetAsFreeMock } from "@/actions/admin/quizzes/clone-as-free-mock";
 import {
   setQuizSetPublished,
   updateQuizSet,
@@ -15,6 +16,14 @@ import {
 } from "@/actions/admin/quizzes/update";
 import { MathSourceField } from "@/components/math-text";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -38,6 +47,7 @@ import { QuizQuestionsPreviewTrigger } from "@/modules/admin/components/quiz-que
 import { SectionQuestionsPastePanel } from "@/modules/admin/components/section-questions-paste-panel";
 import { adminKeys } from "@/modules/admin/hooks/queries/keys";
 import {
+  cloneQuizSetAsFreeMockSchema,
   updateQuizSetMetaSchema,
   updateQuizSetSchema,
   type UpdateQuizSetInput,
@@ -182,6 +192,13 @@ export function QuizDetailEditor({
     Partial<Record<string, string>>
   >({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [cloneTitle, setCloneTitle] = useState("");
+  const [cloneSlug, setCloneSlug] = useState("");
+  const [cloneSlugTouched, setCloneSlugTouched] = useState(false);
+  const [cloneFieldErrors, setCloneFieldErrors] = useState<
+    Partial<Record<string, string>>
+  >({});
   const [pendingSectionDelete, setPendingSectionDelete] = useState<{
     id: string;
     name: string;
@@ -487,6 +504,56 @@ export function QuizDetailEditor({
     setDeleteDialogOpen(true);
   }
 
+  function openCloneDialog() {
+    const suffix = " (Free mock)";
+    const nextTitle =
+      quizSet.title.length + suffix.length <= 160
+        ? `${quizSet.title}${suffix}`
+        : `${quizSet.title.slice(0, Math.max(1, 160 - suffix.length)).trimEnd()}${suffix}`;
+    const nextSlug = slugify(`${quizSet.slug}-free-mock`).slice(0, 160);
+
+    setCloneTitle(nextTitle);
+    setCloneSlug(nextSlug);
+    setCloneSlugTouched(false);
+    setCloneFieldErrors({});
+    setCloneDialogOpen(true);
+  }
+
+  function confirmCloneAsFreeMock() {
+    const parsed = cloneQuizSetAsFreeMockSchema.safeParse({
+      sourceId: quizSet.id,
+      title: cloneTitle,
+      slug: cloneSlug,
+    });
+
+    if (!parsed.success) {
+      setCloneFieldErrors(
+        getZodFieldErrors<{ title: string; slug: string }>(parsed.error),
+      );
+      toast.error(parsed.error.issues[0]?.message ?? "Fix the form errors.");
+      return;
+    }
+
+    setCloneFieldErrors({});
+
+    startTransition(async () => {
+      const result = await cloneQuizSetAsFreeMock(parsed.data);
+
+      if (!result.success) {
+        if (result.errors) {
+          setCloneFieldErrors(result.errors);
+        }
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message ?? "Free mock duplicate created.");
+      setCloneDialogOpen(false);
+      await invalidateQuizLists();
+      router.push(`/admin/quizzes/${result.data.id}`);
+    });
+  }
+
   function confirmDeleteQuizSet() {
     if (locked) return;
 
@@ -516,7 +583,7 @@ export function QuizDetailEditor({
               Back
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
               <Link
                 href={`/faculty/${quizSet.facultySlug}/${quizSet.slug}`}
@@ -526,6 +593,17 @@ export function QuizDetailEditor({
                 <ExternalLink className="size-4" />
               </Link>
             </Button>
+            {!quizSet.isFreeMock ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                onClick={openCloneDialog}
+              >
+                Duplicate as free mock
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -545,6 +623,91 @@ export function QuizDetailEditor({
             </Button>
           </div>
         </div>
+
+        <Dialog open={cloneDialogOpen} onOpenChange={setCloneDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Duplicate as free mock</DialogTitle>
+              <DialogDescription>
+                Creates a new unpublished free-mock quiz set from the saved
+                sections and questions on this set (unsaved edits are not
+                included). The original set is unchanged. Access codes and
+                attempts are not copied.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="clone-title">Title</Label>
+                <Input
+                  id="clone-title"
+                  value={cloneTitle}
+                  onChange={(event) => {
+                    const nextTitle = event.target.value;
+                    setCloneTitle(nextTitle);
+                    setCloneFieldErrors((current) => ({
+                      ...current,
+                      title: undefined,
+                    }));
+                    if (!cloneSlugTouched) {
+                      setCloneSlug(slugify(`${nextTitle}`));
+                    }
+                  }}
+                  aria-invalid={Boolean(cloneFieldErrors.title)}
+                />
+                {cloneFieldErrors.title ? (
+                  <p className="text-sm text-destructive">
+                    {cloneFieldErrors.title}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="clone-slug">Slug</Label>
+                <Input
+                  id="clone-slug"
+                  value={cloneSlug}
+                  onChange={(event) => {
+                    setCloneSlugTouched(true);
+                    setCloneSlug(slugify(event.target.value));
+                    setCloneFieldErrors((current) => ({
+                      ...current,
+                      slug: undefined,
+                    }));
+                  }}
+                  aria-invalid={Boolean(cloneFieldErrors.slug)}
+                />
+                {cloneFieldErrors.slug ? (
+                  <p className="text-sm text-destructive">
+                    {cloneFieldErrors.slug}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Must be unique within {quizSet.facultyName}.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setCloneDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending}
+                onClick={confirmCloneAsFreeMock}
+              >
+                {isPending ? "Creating…" : "Create free mock"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <ConfirmDeleteDialog
           open={deleteDialogOpen}
